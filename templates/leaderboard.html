@@ -1,28 +1,29 @@
 {% extends 'layout.html' %}
 {% block content %}
-  <h1 class="mb-4">Leaderboard</h1>
-  {% if not users %}
-    <p>No participants yet.</p>
-  {% else %}
-    <div class="table-responsive">
-      <table class="table table-striped">
-        <thead>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">Leaderboard</h1>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <table class="table table-striped align-middle mb-0">
+        <thead class="table-light-subtle">
           <tr>
-            <th>Rank</th>
+            <th style="width: 80px;">#</th>
             <th>User</th>
-            <th>Total Points</th>
+            <th style="width: 160px;">Points</th>
           </tr>
         </thead>
         <tbody>
-          {% for user in users %}
+          {% for u in users %}
             <tr>
-              <td>{{ loop.index }}</td>
-              <td>{{ user.username }}</td>
-              <td>{{ user.points }}</td>
+              <td class="text-secondary">{{ loop.index }}</td>
+              <td class="fw-semibold">{{ u.username }}</td>
+              <td><span class="badge text-bg-primary">{{ u.points }}</span></td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  {% endif %}
+  </div>
 {% endblock %}
