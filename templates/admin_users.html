@@ -1,0 +1,58 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h3 mb-0">User Management</h1>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin') }}">Invite Codes</a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light-subtle">
+          <tr>
+            <th>Username</th>
+            <th style="width:120px;">Role</th>
+            <th style="width:100px;">Points</th>
+            <th style="width:360px;">Reset Password</th>
+            <th style="width:120px;">Delete</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td class="fw-semibold">{{ u.username }}</td>
+            <td>
+              {% if u.is_admin %}
+                <span class="badge text-bg-primary">Admin</span>
+              {% else %}
+                <span class="badge text-bg-secondary">User</span>
+              {% endif %}
+            </td>
+            <td>{{ u.points }}</td>
+            <td>
+              <form class="d-flex gap-2" method="post"
+                    action="{{ url_for('admin_reset_password', user_id=u.id) }}"
+                    autocomplete="off" novalidate>
+                <input type="password" name="new_password" class="form-control form-control-sm"
+                       placeholder="Leave blank to auto-generate">
+                <button type="submit" class="btn btn-sm btn-warning">Reset</button>
+              </form>
+            </td>
+            <td>
+              <form method="post" action="{{ url_for('admin_delete_user', user_id=u.id) }}"
+                    onsubmit="return confirm('Delete {{ u.username }}? This cannot be undone.');">
+                <button type="submit" class="btn btn-sm btn-outline-danger"
+                        {% if u.id == current_user.id %}disabled title="You can't delete yourself."{% endif %}>
+                  Delete
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
