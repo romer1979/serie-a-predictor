@@ -132,10 +132,22 @@ class Fixture(db.Model):
             return '2'
         return 'X'
 
+    from zoneinfo import ZoneInfo
+from datetime import datetime
+
+class Fixture(db.Model):
+    # ...
+    match_date = db.Column(db.DateTime, nullable=False)
+    # ...
+
     def is_open_for_prediction(self) -> bool:
         """Return True if predictions are still allowed for this fixture."""
-        return datetime.now(ZoneInfo('America/New_York')) < self.match_date
-
+        now = datetime.now(ZoneInfo('America/New_York'))
+        md = self.match_date
+        if md.tzinfo is None:
+            # Treat naive timestamps as America/New_York
+            md = md.replace(tzinfo=ZoneInfo('America/New_York'))
+        return now < md
 
 class Prediction(db.Model):
     __tablename__ = 'predictions'
