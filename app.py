@@ -111,7 +111,7 @@ class Fixture(db.Model):
     __tablename__ = 'fixtures'
     id = db.Column(db.Integer, primary_key=True)
     match_id = db.Column(db.String, unique=True, nullable=False)
-    match_date = db.Column(db.DateTime, nullable=False)
+    match_date = db.Column(db.DateTime, nullable=False)  # optional: DateTime(timezone=True)
     home_team = db.Column(db.String, nullable=False)
     away_team = db.Column(db.String, nullable=False)
     season = db.Column(db.String, nullable=False)
@@ -123,7 +123,6 @@ class Fixture(db.Model):
     predictions = db.relationship('Prediction', back_populates='fixture', cascade='all, delete-orphan')
 
     def outcome_code(self) -> str | None:
-        """Return '1' for home win, 'X' for draw, '2' for away win, or None if not finished."""
         if self.home_score is None or self.away_score is None:
             return None
         if self.home_score > self.away_score:
@@ -132,22 +131,14 @@ class Fixture(db.Model):
             return '2'
         return 'X'
 
-    from zoneinfo import ZoneInfo
-from datetime import datetime
-
-class Fixture(db.Model):
-    # ...
-    match_date = db.Column(db.DateTime, nullable=False)
-    # ...
-
     def is_open_for_prediction(self) -> bool:
-        """Return True if predictions are still allowed for this fixture."""
+        """True if predictions are still allowed (before kickoff)."""
         now = datetime.now(ZoneInfo('America/New_York'))
         md = self.match_date
         if md.tzinfo is None:
-            # Treat naive timestamps as America/New_York
-            md = md.replace(tzinfo=ZoneInfo('America/New_York'))
+            md = md.replace(tzinfo=ZoneInfo('America/New_York'))  # coerce naive
         return now < md
+
 
 class Prediction(db.Model):
     __tablename__ = 'predictions'
