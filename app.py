@@ -640,6 +640,63 @@ def admin_reset_password(user_id: int):
     flash(f"Password reset for '{user.username}'. New password: {new_pw}", "success")
     return redirect(url_for('admin_users'))
 
+@app.route("/admin/users/<int:user_id>/edit", methods=["GET", "POST"])
+@login_required
+def admin_edit_user(user_id: int):
+    if not current_user.is_admin:
+        abort(403)
+
+    user = db.session.get(User, user_id)
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for("admin_users"))
+
+    if request.method == "POST":
+        new_username = (request.form.get("username") or "").strip()
+        make_admin = request.form.get("is_admin") == "on"
+        new_password = (request.form.get("new_password") or "").strip()
+
+        # Basic validation
+        if not new_username:
+            flash("Username cannot be empty.", "danger")
+            return redirect(url_for("admin_edit_user", user_id=user.id))
+
+        # Unique username check (ignore current user)
+        existing = User.query.filter(
+            func.lower(User.username) == new_username.lower(),
+            User.id != user.id
+        ).first()
+        if existing:
+            flash("That username is already taken.", "danger")
+            return redirect(url_for("admin_edit_user", user_id=user.id))
+
+        # If unchecking admin, make sure we're not removing the last admin
+        if user.is_admin and not make_admin:
+            admin_count = User.query.filter_by(is_admin=True).count()
+            if admin_count <= 1:
+                flash("You cannot remove admin rights from the last remaining admin.", "warning")
+                return redirect(url_for("admin_edit_user", user_id=user.id))
+
+        # Apply updates
+        user.username = new_username
+        user.is_admin = make_admin
+        if new_password:
+            user.set_password(new_password)
+
+        try:
+            db.session.add(user)
+            db.session.commit()
+            flash("User updated successfully.", "success")
+            return redirect(url_for("admin_users"))
+        except Exception as e:
+            db.session.rollback()
+            print("[ADMIN_EDIT_USER_ERROR]", repr(e))
+            flash("Failed to update user due to a server/database error.", "danger")
+            return redirect(url_for("admin_edit_user", user_id=user.id))
+
+    # GET
+    return render_template("admin_user_edit.html", user=user)
+
 # -----------------------------------------------------------------------------
 # CLI commands for setup and administration
 #
