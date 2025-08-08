@@ -562,15 +562,46 @@ def admin_users():
     users = User.query.order_by(func.lower(User.username)).all()
     return render_template('admin_users.html', users=users)
 
-@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@app.post("/admin/users/<int:user_id>/delete")
 @login_required
 def admin_delete_user(user_id: int):
     if not current_user.is_admin:
         abort(403)
+
+    if current_user.id == user_id:
+        flash("You can't delete your own account from here.", "warning")
+        return redirect(url_for("admin_users"))
+
     user = db.session.get(User, user_id)
     if not user:
         flash("User not found.", "danger")
-        return redirect(url_for('admin_users'))
+        return redirect(url_for("admin_users"))
+
+    # Optional: prevent deleting the last remaining admin
+    if user.is_admin:
+        admin_count = User.query.filter_by(is_admin=True).count()
+        if admin_count <= 1:
+            flash("Cannot delete the last remaining admin.", "warning")
+            return redirect(url_for("admin_users"))
+
+    try:
+        # Clear invites referencing this user (FK constraint)
+        Invite.query.filter_by(used_by_user_id=user.id).update(
+            {"used_by_user_id": None}, synchronize_session=False
+        )
+        # Delete predictions (relationship cascade should handle this, but explicit is fine)
+        Prediction.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+
+        db.session.delete(user)
+        db.session.commit()
+        flash("User deleted.", "success")
+    except Exception as e:
+        db.session.rollback()
+        print("[ADMIN_DELETE_USER_ERROR]", repr(e))
+        flash("Failed to delete user due to a server/database error.", "danger")
+
+    return redirect(url_for("admin_users"))
+
 
     # safety rails
     if user.id == current_user.id:
