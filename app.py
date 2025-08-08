@@ -363,20 +363,6 @@ def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[st
         out.setdefault(fixture_id, []).append((username, selection))
     return out
 
-def upcoming_fixtures() -> list[Fixture]:
-    """Return fixtures scheduled to start within the next 7 days."""
-    now = datetime.now(ZoneInfo('America/New_York'))
-    next_week = now + timedelta(days=7)
-    return (
-        Fixture.query.filter(
-            Fixture.match_date >= now,
-            Fixture.match_date <= next_week
-        )
-        .order_by(Fixture.match_date.asc())
-        .all()
-    )
-
-
 # -----------------------------------------------------------------------------
 # Routes
 #
