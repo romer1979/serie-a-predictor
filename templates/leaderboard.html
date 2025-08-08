@@ -1,0 +1,28 @@
+{% extends 'layout.html' %}
+{% block content %}
+  <h1 class="mb-4">Leaderboard</h1>
+  {% if not users %}
+    <p>No participants yet.</p>
+  {% else %}
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>User</th>
+            <th>Total Points</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ user.username }}</td>
+              <td>{{ user.points }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

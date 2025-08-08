@@ -1,0 +1,57 @@
+{% extends 'layout.html' %}
+{% block content %}
+  <h1 class="mb-4">Upcoming Fixtures</h1>
+  {% if not fixtures %}
+    <p>No fixtures scheduled in the next 7 days.</p>
+  {% else %}
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Date & Time</th>
+            <th>Home</th>
+            <th></th>
+            <th>Away</th>
+            <th>Your Prediction</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fixture in fixtures %}
+            <tr>
+              <td>{{ fixture.match_date.strftime('%Y-%m-%d %H:%M') }}</td>
+              <td>{{ fixture.home_team }}</td>
+              <td>vs</td>
+              <td>{{ fixture.away_team }}</td>
+              <td>
+                {% set pred = user_predictions.get(fixture.id) %}
+                {% if pred %}
+                  {{ pred.selection }}
+                  {% if pred.points_awarded is not none %}
+                    ({{ pred.points_awarded }} pts)
+                  {% endif %}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                {% if fixture.is_open_for_prediction() %}
+                  <form action="{{ url_for('predict', fixture_id=fixture.id) }}" method="post" class="d-flex">
+                    <select name="selection" class="form-select form-select-sm me-2">
+                      <option value="1" {% if pred and pred.selection=='1' %}selected{% endif %}>1</option>
+                      <option value="X" {% if pred and pred.selection=='X' %}selected{% endif %}>X</option>
+                      <option value="2" {% if pred and pred.selection=='2' %}selected{% endif %}>2</option>
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-primary">Submit</button>
+                  </form>
+                {% else %}
+                  Locked
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endblock %}

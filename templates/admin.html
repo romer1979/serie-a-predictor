@@ -1,0 +1,36 @@
+{% extends 'layout.html' %}
+{% block content %}
+  <h1 class="mb-4">Admin Panel</h1>
+  <h3>Create Invite Code</h3>
+  <form method="post" class="mb-4">
+    <div class="input-group">
+      <input type="text" name="code" class="form-control" placeholder="Enter new invite code" required />
+      <button type="submit" class="btn btn-success">Create</button>
+    </div>
+  </form>
+  <h3>Existing Invites</h3>
+  <div class="table-responsive">
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Used By</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for invite in invites %}
+          <tr>
+            <td>{{ invite.code }}</td>
+            <td>
+              {% if invite.used_by_user_id %}
+                User ID {{ invite.used_by_user_id }}
+              {% else %}
+                Unused
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}
