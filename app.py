@@ -32,6 +32,9 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from secrets import token_urlsafe
+from sqlalchemy import func
+
 
 import requests
 from flask import (
@@ -525,6 +528,62 @@ def admin():
     invites = Invite.query.all()
     return render_template('admin.html', invites=invites)
 
+# --- Admin: list users, delete user, reset password ---
+
+@app.route('/admin/users', methods=['GET'])
+@login_required
+def admin_users():
+    if not current_user.is_admin:
+        abort(403)
+    users = User.query.order_by(func.lower(User.username)).all()
+    return render_template('admin_users.html', users=users)
+
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+def admin_delete_user(user_id: int):
+    if not current_user.is_admin:
+        abort(403)
+    user = db.session.get(User, user_id)
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for('admin_users'))
+
+    # safety rails
+    if user.id == current_user.id:
+        flash("You cannot delete your own account while logged in as admin.", "warning")
+        return redirect(url_for('admin_users'))
+    if user.is_admin:
+        admin_count = User.query.filter_by(is_admin=True).count()
+        if admin_count <= 1:
+            flash("Cannot delete the last remaining admin.", "warning")
+            return redirect(url_for('admin_users'))
+
+    # cascades will remove predictions thanks to relationship
+    db.session.delete(user)
+    db.session.commit()
+    flash(f"Deleted user '{user.username}'.", "success")
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/users/<int:user_id>/reset_password', methods=['POST'])
+@login_required
+def admin_reset_password(user_id: int):
+    if not current_user.is_admin:
+        abort(403)
+    user = db.session.get(User, user_id)
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for('admin_users'))
+
+    new_pw = (request.form.get('new_password') or "").strip()
+    if not new_pw:
+        # generate a secure temporary password if admin left it blank
+        new_pw = token_urlsafe(12)
+
+    user.set_password(new_pw)
+    db.session.add(user)
+    db.session.commit()
+    flash(f"Password reset for '{user.username}'. New password: {new_pw}", "success")
+    return redirect(url_for('admin_users'))
 
 # -----------------------------------------------------------------------------
 # CLI commands for setup and administration
