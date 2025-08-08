@@ -457,30 +457,30 @@ def init_db_command() -> None:
 with app.app_context():
     db.create_all()
 
-# --- bootstrap admin & invite on first run (prod-safe) ---
+# --- one-time admin force reset (controlled by env) ---
 with app.app_context():
-    try:
-        # Admin credentials from env (fallbacks if not set)
-        admin_username = os.getenv("ADMIN_USERNAME", "admin")
-        admin_password = os.getenv("ADMIN_PASSWORD", "admin")
-        initial_invite = os.getenv("INITIAL_INVITE_CODE", os.getenv("INVITE_CODE", "demo-invite"))
+    flag = (os.getenv("ADMIN_FORCE_RESET", "0") or "").strip()
+    uname = (os.getenv("ADMIN_USERNAME", "admin") or "").strip()
+    pwd = os.getenv("ADMIN_PASSWORD")
+    invite_code = (os.getenv("INITIAL_INVITE_CODE", os.getenv("INVITE_CODE", "demo-invite")) or "").strip()
 
-        # Create admin if none exists
-        if not User.query.filter_by(is_admin=True).first():
-            admin = User(username=admin_username, is_admin=True)
-            admin.set_password(admin_password)
-            db.session.add(admin)
-            db.session.commit()
-            print(f"[BOOTSTRAP] Admin created: {admin_username}/{admin_password} (change it ASAP)")
+    print(f"[BOOTSTRAP] Reset flag={flag} username={uname}")  # visibility in logs (no password printed)
 
-        # Seed an invite code if missing
-        if initial_invite and not Invite.query.filter_by(code=initial_invite).first():
-            db.session.add(Invite(code=initial_invite))
+    if flag == "1" and uname and pwd:
+        u = User.query.filter_by(username=uname).first()
+        if not u:
+            u = User(username=uname, is_admin=True)
+            db.session.add(u)
+        u.is_admin = True
+        u.set_password(pwd)
+        db.session.commit()
+        print(f"[BOOTSTRAP] Admin reset for {uname}")
+
+        if invite_code and not Invite.query.filter_by(code=invite_code).first():
+            db.session.add(Invite(code=invite_code))
             db.session.commit()
-            print(f"[BOOTSTRAP] Invite code created: {initial_invite}")
-    except Exception as e:
-        # Don’t crash the app if bootstrap fails; log and continue
-        print(f"[BOOTSTRAP] Skipped due to error: {e}")
+            print(f"[BOOTSTRAP] Invite code ensured: {invite_code}")
+
     
 if __name__ == '__main__':
     with app.app_context():
