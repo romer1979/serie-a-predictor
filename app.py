@@ -390,29 +390,45 @@ def register():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
-        invite_code = request.form.get('invite')
-        invite = Invite.query.filter_by(code=invite_code, used_by_user_id=None).first()
-        if not invite:
-            flash('Invalid or used invite code.', 'danger')
+        try:
+            username = request.form.get('username')
+            password = request.form.get('password')
+            invite_code = request.form.get('invite')
+
+            invite = Invite.query.filter_by(code=invite_code, used_by_user_id=None).first()
+            if not invite:
+                flash('Invalid or used invite code.', 'danger')
+                return render_template('register.html')
+
+            if User.query.filter_by(username=username).first():
+                flash('Username already exists.', 'danger')
+                return render_template('register.html')
+
+            if not username or not password:
+                flash('Username and password are required.', 'danger')
+                return render_template('register.html')
+
+            user = User(username=username)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.flush()  # get user.id
+
+            invite.used_by_user_id = user.id
+            db.session.add(invite)
+            db.session.commit()
+
+            flash('Registration successful. Please log in.', 'success')
+            return redirect(url_for('login'))
+        except Exception as e:
+            # Log full error to Render logs
+            import traceback
+            print("[REGISTER_ERROR]", repr(e))
+            traceback.print_exc()
+            db.session.rollback()
+            flash('Registration failed due to a server error. Please try again.', 'danger')
             return render_template('register.html')
-        if User.query.filter_by(username=username).first():
-            flash('Username already exists.', 'danger')
-            return render_template('register.html')
-        if not username or not password:
-            flash('Username and password are required.', 'danger')
-            return render_template('register.html')
-        user = User(username=username)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.flush()
-        invite.used_by_user_id = user.id
-        db.session.add(invite)
-        db.session.commit()
-        flash('Registration successful. Please log in.', 'success')
-        return redirect(url_for('login'))
     return render_template('register.html')
+
 
 
 @app.route('/admin', methods=['GET', 'POST'])
