@@ -453,7 +453,10 @@ def init_db_command() -> None:
     else:
         print('Admin user already exists.')
 
-
+# Ensure DB tables exist on startup (safe: will not overwrite existing data)
+with app.app_context():
+    db.create_all()
+    
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
