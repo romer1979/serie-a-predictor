@@ -29,7 +29,7 @@ README.md for full deployment instructions.
 
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from secrets import token_urlsafe
@@ -311,6 +311,61 @@ def update_fixtures() -> None:
 
     db.session.commit()
     evaluate_predictions()
+
+# --- Adaptive fetch throttle ---
+FETCH_STATE = {"last_run": None, "last_interval": None}
+
+def _adaptive_min_interval() -> timedelta:
+    """Return how often we should hit the API right now."""
+    tz = ZoneInfo('America/New_York')
+    now = datetime.now(tz)
+
+    # If anything is live, poll every 60s
+    live = Fixture.query.filter(Fixture.status.in_(('IN_PLAY', 'PAUSED'))).count()
+    if live > 0:
+        return timedelta(seconds=60)
+
+    # If matches kick off within the next 2 hours, poll every 60s
+    soon = (
+        Fixture.query
+        .filter(Fixture.match_date >= now, Fixture.match_date <= now + timedelta(hours=2))
+        .count()
+    )
+    if soon > 0:
+        return timedelta(seconds=60)
+
+    # If matches are today (but not within 2h), poll every 5 min
+    today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    today = (
+        Fixture.query
+        .filter(Fixture.match_date >= now, Fixture.match_date <= today_end)
+        .count()
+    )
+    if today > 0:
+        return timedelta(minutes=5)
+
+    # Otherwise (quiet times / off days), poll every 6 hours
+    return timedelta(hours=6)
+
+
+def update_fixtures_adaptive(force: bool = False) -> None:
+    """Call update_fixtures() only if the adaptive interval has elapsed."""
+    tz = ZoneInfo('America/New_York')
+    now = datetime.now(tz)
+
+    min_interval = _adaptive_min_interval()
+    last_run = FETCH_STATE["last_run"]
+
+    # If not forced and we haven't exceeded the interval, skip
+    if not force and last_run is not None and (now - last_run) < min_interval:
+        return
+
+    # Do the real work
+    update_fixtures()
+
+    # Record state
+    FETCH_STATE["last_run"] = now
+    FETCH_STATE["last_interval"] = min_interval
 
 def upcoming_fixtures() -> list[Fixture]:
     """
