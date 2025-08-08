@@ -409,6 +409,26 @@ def predict(fixture_id: int):
     db.session.commit()
     return redirect(url_for('index'))
 
+@app.route('/save_all_predictions', methods=['POST'])
+@login_required
+def save_all_predictions():
+    # Only consider fixtures still open for prediction
+    open_fixtures = Fixture.query.all()
+    for fixture in open_fixtures:
+        if not fixture.is_open_for_prediction():
+            continue
+        choice = request.form.get(f'fixture_{fixture.id}')
+        if choice not in ('1', 'X', '2', None):
+            continue
+        if choice:
+            pred = Prediction.query.filter_by(user_id=current_user.id, fixture_id=fixture.id).first()
+            if not pred:
+                pred = Prediction(user_id=current_user.id, fixture_id=fixture.id)
+                db.session.add(pred)
+            pred.selection = choice
+    db.session.commit()
+    flash("All predictions saved!", "success")
+    return redirect(url_for('index'))
 
 @app.route('/leaderboard')
 @login_required
