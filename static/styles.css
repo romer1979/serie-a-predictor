@@ -1,0 +1,5 @@
+/* Subtle polish */
+.table > :not(caption) > * > * { vertical-align: middle; }
+.card { border-radius: 14px; }
+.badge { letter-spacing: .2px; }
+.toast { border-radius: 12px; }
