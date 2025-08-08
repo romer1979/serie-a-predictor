@@ -1,77 +1,106 @@
-<tbody>
-  {% for f in fixtures %}
-    {% set myp = user_predictions.get(f.id) %}
-    <tr>
-      <td class="text-nowrap">{{ f.match_date.strftime('%a %b %d, %H:%M') }}</td>
-      <td>
-        <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
-        <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
-      </td>
+{% extends 'layout.html' %}
+{% block content %}
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">Upcoming Fixtures</h1>
+    <span class="text-secondary small">Times in Eastern</span>
+  </div>
 
-      <td>
-        {% if f.is_open_for_prediction() %}
-          <form id="pick-{{ f.id }}" method="post"
-                action="{{ url_for('predict', fixture_id=f.id) }}"
-                class="d-inline-flex flex-wrap gap-2 mb-0"
-                autocomplete="off" novalidate>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="selection" id="p1-{{ f.id }}" value="1"
-                     {% if myp and myp.selection == '1' %}checked{% endif %}>
-              <label class="form-check-label" for="p1-{{ f.id }}">1</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="selection" id="px-{{ f.id }}" value="X"
-                     {% if myp and myp.selection == 'X' %}checked{% endif %}>
-              <label class="form-check-label" for="px-{{ f.id }}">X</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="radio" name="selection" id="p2-{{ f.id }}" value="2"
-                     {% if myp and myp.selection == '2' %}checked{% endif %}>
-              <label class="form-check-label" for="p2-{{ f.id }}">2</label>
-            </div>
-          </form>
-          <button type="submit" class="btn btn-primary btn-sm"
-                  form="pick-{{ f.id }}">Save</button>
-        {% else %}
-          {% if myp %}
-            <span class="badge text-bg-secondary">Locked: {{ myp.selection }}</span>
-          {% else %}
-            <span class="badge text-bg-secondary">Locked</span>
-          {% endif %}
-        {% endif %}
-      </td>
+  {% if not fixtures %}
+    <div class="alert alert-secondary">No fixtures scheduled in the next 7 days.</div>
+  {% else %}
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light-subtle">
+              <tr>
+                <th style="width: 150px;">Date & Time</th>
+                <th>Match</th>
+                <th style="width: 220px;">Your Pick</th>
+                <th style="width: 140px;">Result / Status</th>
+                <th style="width: 320px;">Predictions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in fixtures %}
+                {% set myp = user_predictions.get(f.id) %}
+                <tr>
+                  <td class="text-nowrap">{{ f.match_date.strftime('%a %b %d, %H:%M') }}</td>
+                  <td>
+                    <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
+                    <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
+                  </td>
 
-      <td>
-        {% if f.status in ['IN_PLAY', 'PAUSED'] %}
-          <span class="badge text-bg-warning text-dark">LIVE</span>
-          {% if f.home_score is not none and f.away_score is not none %}
-            <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
-          {% endif %}
-        {% elif f.status == 'FINISHED' %}
-          <span class="badge text-bg-success">FT</span>
-          <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
-        {% else %}
-          <span class="badge text-bg-light text-secondary">{{ f.status }}</span>
-        {% endif %}
-      </td>
+                  <td>
+                    {% if f.is_open_for_prediction() %}
+                      <form id="pick-{{ f.id }}" method="post"
+                            action="{{ url_for('predict', fixture_id=f.id) }}"
+                            class="d-inline-flex flex-wrap gap-2 mb-0"
+                            autocomplete="off" novalidate>
+                        <div class="form-check">
+                          <input class="form-check-input" type="radio" name="selection" id="p1-{{ f.id }}" value="1"
+                                 {% if myp and myp.selection == '1' %}checked{% endif %}>
+                          <label class="form-check-label" for="p1-{{ f.id }}">1</label>
+                        </div>
+                        <div class="form-check">
+                          <input class="form-check-input" type="radio" name="selection" id="px-{{ f.id }}" value="X"
+                                 {% if myp and myp.selection == 'X' %}checked{% endif %}>
+                          <label class="form-check-label" for="px-{{ f.id }}">X</label>
+                        </div>
+                        <div class="form-check">
+                          <input class="form-check-input" type="radio" name="selection" id="p2-{{ f.id }}" value="2"
+                                 {% if myp and myp.selection == '2' %}checked{% endif %}>
+                          <label class="form-check-label" for="p2-{{ f.id }}">2</label>
+                        </div>
+                      </form>
+                      <button type="submit" class="btn btn-primary btn-sm"
+                              form="pick-{{ f.id }}">Save</button>
+                    {% else %}
+                      {% if myp %}
+                        <span class="badge text-bg-secondary">Locked: {{ myp.selection }}</span>
+                      {% else %}
+                        <span class="badge text-bg-secondary">Locked</span>
+                      {% endif %}
+                    {% endif %}
+                  </td>
 
-      <td>
-        {% set show_preds_now = (not f.is_open_for_prediction()) %}
-        {% if not show_preds_now %}
-          <span class="text-secondary">Hidden until kickoff</span>
-        {% else %}
-          {% set plist = all_preds.get(f.id, []) %}
-          {% if not plist %}
-            <span class="text-secondary">No predictions</span>
-          {% else %}
-            <div class="small">
-              {% for uname, sel in plist %}
-                <span class="badge rounded-pill text-bg-dark me-1 mb-1">{{ uname }}: {{ sel }}</span>
+                  <td>
+                    {% if f.status in ['IN_PLAY', 'PAUSED'] %}
+                      <span class="badge text-bg-warning text-dark">LIVE</span>
+                      {% if f.home_score is not none and f.away_score is not none %}
+                        <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
+                      {% endif %}
+                    {% elif f.status == 'FINISHED' %}
+                      <span class="badge text-bg-success">FT</span>
+                      <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
+                    {% else %}
+                      <span class="badge text-bg-light text-secondary">{{ f.status }}</span>
+                    {% endif %}
+                  </td>
+
+                  <td>
+                    {% set show_preds_now = (not f.is_open_for_prediction()) %}
+                    {% if not show_preds_now %}
+                      <span class="text-secondary">Hidden until kickoff</span>
+                    {% else %}
+                      {% set plist = all_preds.get(f.id, []) %}
+                      {% if not plist %}
+                        <span class="text-secondary">No predictions</span>
+                      {% else %}
+                        <div class="small">
+                          {% for uname, sel in plist %}
+                            <span class="badge rounded-pill text-bg-dark me-1 mb-1">{{ uname }}: {{ sel }}</span>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    {% endif %}
+                  </td>
+                </tr>
               {% endfor %}
-            </div>
-          {% endif %}
-        {% endif %}
-      </td>
-    </tr>
-  {% endfor %}
-</tbody>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
