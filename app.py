@@ -301,6 +301,22 @@ def evaluate_predictions() -> None:
                 db.session.add(prediction)
     db.session.commit()
 
+def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[str, str]]]:
+    """Return {fixture_id: [(username, selection), ...]} for the given fixtures."""
+    if not fixtures:
+        return {}
+    ids = [f.id for f in fixtures]
+    rows = (
+        db.session.query(Prediction.fixture_id, User.username, Prediction.selection)
+        .join(User, User.id == Prediction.user_id)
+        .filter(Prediction.fixture_id.in_(ids))
+        .order_by(User.username.asc())
+        .all()
+    )
+    out: dict[int, list[tuple[str, str]]] = {}
+    for fixture_id, username, selection in rows:
+        out.setdefault(fixture_id, []).append((username, selection))
+    return out
 
 def upcoming_fixtures() -> list[Fixture]:
     """Return fixtures scheduled to start within the next 7 days."""
@@ -326,8 +342,14 @@ def index():
     update_fixtures()
     fixtures = upcoming_fixtures()
     user_predictions = {p.fixture_id: p for p in current_user.predictions}
-    return render_template('index.html', fixtures=fixtures, user_predictions=user_predictions)
-
+    # NEW: add all users' predictions for visible-after-kickoff column
+    all_preds = predictions_for_fixtures(fixtures)
+    return render_template(
+        'index.html',
+        fixtures=fixtures,
+        user_predictions=user_predictions,
+        all_preds=all_preds,  # <-- pass to template
+    )
 
 @app.route('/predict/<int:fixture_id>', methods=['POST'])
 @login_required
