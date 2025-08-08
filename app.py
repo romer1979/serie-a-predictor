@@ -246,45 +246,54 @@ def fetch_fixtures_from_fallback() -> list[dict]:
     return fixtures
 
 
-def update_fixtures() -> None:
+def upcoming_fixtures() -> list[Fixture]:
     """
-    Synchronise the local fixture table with data from the API or fallback. New
-    fixtures are inserted; existing fixtures are updated if the status or
-    scores have changed. This function should be called periodically (e.g. at
-    each page request) to ensure the database reflects the latest information.
+    Show fixtures starting within the next 7 days,
+    PLUS all fixtures from the season's first matchweek (Matchday 1)
+    even if they're further out. Predictions still lock at kickoff.
     """
-    fixtures_from_api = fetch_fixtures_from_api()
-    fixtures_to_use = fixtures_from_api if fixtures_from_api else fetch_fixtures_from_fallback()
-    for fi in fixtures_to_use:
-        existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
-        if existing:
-            updated = False
-            if fi['status'] != existing.status:
-                existing.status = fi['status']
-                updated = True
-            if fi['home_score'] is not None and fi['home_score'] != existing.home_score:
-                existing.home_score = fi['home_score']
-                updated = True
-            if fi['away_score'] is not None and fi['away_score'] != existing.away_score:
-                existing.away_score = fi['away_score']
-                updated = True
-            if updated:
-                db.session.add(existing)
-        else:
-            fixture = Fixture(
-                match_id=fi['match_id'],
-                match_date=fi['match_date'],
-                home_team=fi['home_team'],
-                away_team=fi['away_team'],
-                season=fi['season'],
-                matchday=fi['matchday'],
-                status=fi['status'],
-                home_score=fi['home_score'],
-                away_score=fi['away_score'],
+    tz = ZoneInfo('America/New_York')
+    now = datetime.now(tz)
+    next_week = now + timedelta(days=7)
+
+    # Base: next 7 days
+    base_q = (
+        Fixture.query.filter(
+            Fixture.match_date >= now,
+            Fixture.match_date <= next_week
+        )
+    )
+
+    base = base_q.all()
+
+    # Find the very first upcoming scheduled fixture to detect Week 1
+    first_upcoming = (
+        Fixture.query.filter(
+            Fixture.status.in_(('SCHEDULED', 'TIMED')),
+            Fixture.match_date >= now
+        )
+        .order_by(Fixture.match_date.asc())
+        .first()
+    )
+
+    week1 = []
+    if first_upcoming and first_upcoming.matchday:
+        # Include ALL fixtures that share that first match's matchday (Week 1),
+        # regardless of whether they’re more than 7 days away.
+        week1 = (
+            Fixture.query.filter(
+                Fixture.status.in_(('SCHEDULED', 'TIMED')),
+                Fixture.matchday == first_upcoming.matchday
             )
-            db.session.add(fixture)
-    db.session.commit()
-    evaluate_predictions()
+            .all()
+        )
+
+    # Merge + de-dup + sort
+    merged = {f.id: f for f in base}
+    for f in week1:
+        merged[f.id] = f
+    return sorted(merged.values(), key=lambda f: f.match_date)
+
 
 
 def evaluate_predictions() -> None:
