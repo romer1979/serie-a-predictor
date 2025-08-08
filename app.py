@@ -334,7 +334,7 @@ def _adaptive_min_interval() -> timedelta:
     if soon > 0:
         return timedelta(seconds=60)
 
-    # If matches are today (but not within 2h), poll every 5 min
+    # If matches are today (but not within 2h), poll every 6 hours
     today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
     today = (
         Fixture.query
@@ -342,10 +342,10 @@ def _adaptive_min_interval() -> timedelta:
         .count()
     )
     if today > 0:
-        return timedelta(minutes=5)
+        return timedelta(hours=6)
 
     # Otherwise (quiet times / off days), poll every 6 hours
-    return timedelta(hours=6)
+    return timedelta(hours=24)
 
 
 def update_fixtures_adaptive(force: bool = False) -> None:
@@ -455,7 +455,7 @@ def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[st
 @app.route('/')
 @login_required
 def index():
-    update_fixtures()
+    update_fixtures_adaptive()
     fixtures = upcoming_fixtures()
     user_predictions = {p.fixture_id: p for p in current_user.predictions}
     # NEW: add all users' predictions for visible-after-kickoff column
@@ -515,7 +515,7 @@ def save_all_predictions():
 @app.route('/leaderboard')
 @login_required
 def leaderboard():
-    update_fixtures()
+    update_fixtures_adaptive()
     users = User.query.all()
     users_sorted = sorted(users, key=lambda u: (-u.points, u.username.lower()))
     return render_template('leaderboard.html', users=users_sorted)
@@ -751,6 +751,15 @@ def admin_edit_user(user_id: int):
 
     # GET
     return render_template("admin_user_edit.html", user=user)
+    
+@app.route('/admin/refresh', methods=['POST'])
+@login_required
+def admin_refresh():
+    if not current_user.is_admin:
+        abort(403)
+    update_fixtures_adaptive(force=True)
+    flash("Fixtures refreshed.", "success")
+    return redirect(url_for('index'))
 
 # -----------------------------------------------------------------------------
 # CLI commands for setup and administration
