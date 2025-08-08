@@ -56,6 +56,7 @@ from flask_login import (
 )
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 # -----------------------------------------------------------------------------
 # Configuration
@@ -66,11 +67,34 @@ from werkzeug.security import check_password_hash, generate_password_hash
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key')
 
-# Use SQLite by default. Override with DATABASE_URL for PostgreSQL or other
-# engines. SQLAlchemy can parse URLs like `postgresql://user:pass@host/dbname`.
-database_url = os.environ.get('DATABASE_URL', 'sqlite:///serie_a.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+# DB URL: prefer env (Render Postgres), fall back to local SQLite
+raw_db_url = os.environ.get('DATABASE_URL', 'sqlite:///serie_a.db')
+
+# Render sometimes provides postgres URLs as "postgres://"
+if raw_db_url.startswith('postgres://'):
+    raw_db_url = raw_db_url.replace('postgres://', 'postgresql+psycopg2://', 1)
+
+# Ensure sslmode=require for Postgres if not already present
+if raw_db_url.startswith('postgresql'):
+    parsed = urlparse(raw_db_url)
+    q = parse_qs(parsed.query)
+    if 'sslmode' not in q:
+        q['sslmode'] = ['require']
+        new_query = urlencode(q, doseq=True)
+        raw_db_url = urlunparse(parsed._replace(query=new_query))
+
+app.config['SQLALCHEMY_DATABASE_URI'] = raw_db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Engine options to keep connections healthy on Render
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,   # test connections before using them
+    'pool_recycle': 300,     # recycle connections every 5 minutes
+    'pool_size': 5,          # small pool for free/Starter dynos
+    'max_overflow': 5,       # allow brief bursts
+    'pool_timeout': 30,      # seconds to wait for a connection
+    # psycopg2 will also see sslmode=require via the URL; connect_args is optional
+}
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
