@@ -245,6 +245,42 @@ def fetch_fixtures_from_fallback() -> list[dict]:
             })
     return fixtures
 
+def update_fixtures() -> None:
+    """
+    Sync local fixtures with API (if key present) or fallback file.
+    Insert new fixtures; update status/scores on existing ones.
+    Then evaluate predictions for finished matches.
+    """
+    fixtures_from_api = fetch_fixtures_from_api()  # requires FOOTBALL_DATA_API_KEY or returns []
+    fixtures_to_use = fixtures_from_api if fixtures_from_api else fetch_fixtures_from_fallback()
+
+    for fi in fixtures_to_use:
+        existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
+        if existing:
+            updated = False
+            if fi['status'] != existing.status:
+                existing.status = fi['status']; updated = True
+            if fi['home_score'] is not None and fi['home_score'] != existing.home_score:
+                existing.home_score = fi['home_score']; updated = True
+            if fi['away_score'] is not None and fi['away_score'] != existing.away_score:
+                existing.away_score = fi['away_score']; updated = True
+            if updated:
+                db.session.add(existing)
+        else:
+            db.session.add(Fixture(
+                match_id=fi['match_id'],
+                match_date=fi['match_date'],
+                home_team=fi['home_team'],
+                away_team=fi['away_team'],
+                season=fi['season'],
+                matchday=fi.get('matchday'),
+                status=fi['status'],
+                home_score=fi['home_score'],
+                away_score=fi['away_score'],
+            ))
+
+    db.session.commit()
+    evaluate_predictions()
 
 def upcoming_fixtures() -> list[Fixture]:
     """
