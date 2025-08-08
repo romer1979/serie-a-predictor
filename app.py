@@ -456,6 +456,31 @@ def init_db_command() -> None:
 # Ensure DB tables exist on startup (safe: will not overwrite existing data)
 with app.app_context():
     db.create_all()
+
+# --- bootstrap admin & invite on first run (prod-safe) ---
+with app.app_context():
+    try:
+        # Admin credentials from env (fallbacks if not set)
+        admin_username = os.getenv("ADMIN_USERNAME", "admin")
+        admin_password = os.getenv("ADMIN_PASSWORD", "admin")
+        initial_invite = os.getenv("INITIAL_INVITE_CODE", os.getenv("INVITE_CODE", "demo-invite"))
+
+        # Create admin if none exists
+        if not User.query.filter_by(is_admin=True).first():
+            admin = User(username=admin_username, is_admin=True)
+            admin.set_password(admin_password)
+            db.session.add(admin)
+            db.session.commit()
+            print(f"[BOOTSTRAP] Admin created: {admin_username}/{admin_password} (change it ASAP)")
+
+        # Seed an invite code if missing
+        if initial_invite and not Invite.query.filter_by(code=initial_invite).first():
+            db.session.add(Invite(code=initial_invite))
+            db.session.commit()
+            print(f"[BOOTSTRAP] Invite code created: {initial_invite}")
+    except Exception as e:
+        # Don’t crash the app if bootstrap fails; log and continue
+        print(f"[BOOTSTRAP] Skipped due to error: {e}")
     
 if __name__ == '__main__':
     with app.app_context():
