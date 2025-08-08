@@ -14,8 +14,7 @@
             <th>Username</th>
             <th style="width:120px;">Role</th>
             <th style="width:100px;">Points</th>
-            <th style="width:360px;">Reset Password</th>
-            <th style="width:120px;">Delete</th>
+            <th style="width:480px;">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -30,23 +29,34 @@
               {% endif %}
             </td>
             <td>{{ u.points }}</td>
-            <td>
-              <form class="d-flex gap-2" method="post"
+            <td class="text-nowrap">
+              <!-- Edit -->
+              <a class="btn btn-sm btn-secondary me-2"
+                 href="{{ url_for('admin_edit_user', user_id=u.id) }}">Edit</a>
+
+              <!-- Reset password (optional new password field) -->
+              <form class="d-inline-flex align-items-center gap-2 me-2"
+                    method="post"
                     action="{{ url_for('admin_reset_password', user_id=u.id) }}"
                     autocomplete="off" novalidate>
-                <input type="password" name="new_password" class="form-control form-control-sm"
+                <input type="password"
+                       name="new_password"
+                       class="form-control form-control-sm"
                        placeholder="Leave blank to auto-generate">
-                <button type="submit" class="btn btn-sm btn-warning">Reset</button>
+                <button type="submit" class="btn btn-sm btn-outline-warning">Reset PW</button>
               </form>
-            </td>
-            <td>
-              <form method="post" action="{{ url_for('admin_delete_user', user_id=u.id) }}"
-                    onsubmit="return confirm('Delete {{ u.username }}? This cannot be undone.');">
-                <button type="submit" class="btn btn-sm btn-outline-danger"
-                        {% if u.id == current_user.id %}disabled title="You can't delete yourself."{% endif %}>
-                  Delete
-                </button>
-              </form>
+
+              <!-- Delete (disabled for self) -->
+              {% if u.id != current_user.id %}
+                <form class="d-inline" method="post"
+                      action="{{ url_for('admin_delete_user', user_id=u.id) }}"
+                      onsubmit="return confirm('Delete user {{ u.username }}? This cannot be undone.');">
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+              {% else %}
+                <button class="btn btn-sm btn-outline-danger" disabled
+                        title="You can't delete yourself.">Delete</button>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}
