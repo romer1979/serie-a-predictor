@@ -59,6 +59,10 @@
               <tbody>
                 {% for f in fixtures %}
                   {% set myp = user_predictions.get(f.id) %}
+                  {# Show predictions once: status is live/paused/finished OR current UTC >= kickoff #}
+                  {% set kickoff = f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=namespace.utc) %}
+                  {% set show_preds_now = (f.status in ['IN_PLAY', 'PAUSED', 'FINISHED']) or (utc_now and utc_now >= kickoff) %}
+
                   <tr>
                     <td class="text-nowrap">
                       <time class="local-time" datetime="{{ f.match_date|utc_iso }}">
@@ -119,8 +123,6 @@
                     </td>
 
                     <td>
-                      {# hide predictions until kickoff for everyone #}
-                      {% set show_preds_now = (not f.is_open_for_prediction()) %}
                       {% if not show_preds_now %}
                         <span class="text-secondary">Hidden until kickoff</span>
                       {% else %}
@@ -155,7 +157,7 @@
     </div>
   {% endif %}
 
-  {# Client-side local time rendering #}
+  <!-- Render UTC times in the viewer's local timezone -->
   <script>
     (function () {
       const opts = {
