@@ -73,5 +73,23 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Local time converter for kickoff times + label updater -->
+<script>
+(function () {
+  const fmt = { weekday: 'short', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+  const tz  = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const label = document.getElementById('tz-label');
+  if (label) label.textContent = `Times in ${tz}`;
+
+  document.querySelectorAll('time.kickoff').forEach(el => {
+    const iso = el.getAttribute('datetime');
+    if (!iso) return;
+    const d = new Date(iso);
+    el.textContent = d.toLocaleString(undefined, fmt);
+    el.title = `Your time zone: ${tz}`;
+  });
+})();
+</script>
 </body>
 </html>
