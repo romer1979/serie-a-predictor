@@ -160,11 +160,11 @@ class Fixture(db.Model):
 
     def is_open_for_prediction(self) -> bool:
         """True if predictions are still allowed (before kickoff)."""
-        now = datetime.now(ZoneInfo('America/New_York'))
+        now_utc = datetime.now(timezone.utc)
         md = self.match_date
         if md.tzinfo is None:
-            md = md.replace(tzinfo=ZoneInfo('America/New_York'))  # coerce naive
-        return now < md
+            md = md.replace(tzinfo=timezone.utc)  # coerce naive
+        return now_utc < md
 
 
 class Prediction(db.Model):
@@ -225,10 +225,9 @@ def fetch_fixtures_from_api() -> list[dict]:
             continue
         utc_date_str = match['utcDate']
         utc_dt = datetime.fromisoformat(utc_date_str.replace('Z', '+00:00'))
-        local_dt = utc_dt.astimezone(ZoneInfo('America/New_York'))
         fixtures.append({
             'match_id': str(match['id']),
-            'match_date': local_dt,
+            'match_date': utc_dt,
             'home_team': match['homeTeam']['name'],
             'away_team': match['awayTeam']['name'],
             'season': season_str,
@@ -261,10 +260,11 @@ def fetch_fixtures_from_fallback() -> list[dict]:
             date_str = match['date']
             time_str = match.get('time', '18:00')
             dt = datetime.fromisoformat(f"{date_str}T{time_str}")
-            dt_local = dt.replace(tzinfo=ZoneInfo('Europe/Rome')).astimezone(ZoneInfo('America/New_York'))
+            dt_local = dt.replace(tzinfo=ZoneInfo('Europe/Rome'))
+            utc_dt = dt_local_it.astimezone(timezone.utc)
             fixtures.append({
                 'match_id': f"{date_str}-{match['team1']}-{match['team2']}",
-                'match_date': dt_local,
+                'match_date': utc_dt,
                 'home_team': match['team1'],
                 'away_team': match['team2'],
                 'season': season_data.get('name', '2024/25'),
@@ -373,15 +373,14 @@ def upcoming_fixtures() -> list[Fixture]:
     PLUS all fixtures from the season's first matchweek (Matchday 1)
     even if they're further out. Predictions still lock at kickoff.
     """
-    tz = ZoneInfo('America/New_York')
-    now = datetime.now(tz)
-    next_week = now + timedelta(days=7)
+    now_utc = datetime.now(timezone.utc)
+    next_week_utc = now_utc + timedelta(days=7)
 
     # Base: next 7 days
     base_q = (
         Fixture.query.filter(
-            Fixture.match_date >= now,
-            Fixture.match_date <= next_week
+            Fixture.match_date >= now_utc,
+            Fixture.match_date <= next_week_utc
         )
     )
 
@@ -394,7 +393,7 @@ def upcoming_fixtures() -> list[Fixture]:
             Fixture.match_date >= now
         )
         .order_by(Fixture.match_date.asc())
-        .first()
+        .all()
     )
 
     week1 = []
