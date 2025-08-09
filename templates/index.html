@@ -10,12 +10,13 @@
   {% else %}
     <div class="card shadow-sm">
       <div class="card-body p-0">
+        <!-- ONE form for all fixtures -->
         <form method="post" action="{{ url_for('save_all_predictions') }}" autocomplete="off" novalidate>
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
               <thead class="table-light-subtle">
                 <tr>
-                  <th style="width: 200px;">Date & Time</th>
+                  <th style="width: 200px;">Date &amp; Time</th>
                   <th>Match</th>
                   <th style="width: 260px;">Your Pick</th>
                   <th style="width: 160px;">Result / Status</th>
@@ -27,12 +28,15 @@
                   {% set myp = user_predictions.get(f.id) %}
                   <tr>
                     <td class="text-nowrap">
-                      <time class="local-time" datetime="{{ f.match_date.isoformat() }}">{{
-                        f.match_date.isoformat()
-                      }}</time>
+                      <time class="local-time" datetime="{{ f.match_date|utc_iso }}">
+                        {{ f.match_date|utc_iso }}
+                      </time>
                     </td>
+
                     <td>
-                      <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
+                      <div class="fw-semibold">
+                        {{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}
+                      </div>
                       <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
                     </td>
 
@@ -112,24 +116,22 @@
     </div>
   {% endif %}
 
+  <!-- Converts UTC ISO in <time datetime="..."> to viewer's local time -->
   <script>
-    // Convert all <time.local-time datetime="...UTC..."> to the viewer's local TZ
     (function () {
       const opts = {
         weekday: 'short', month: 'short', day: '2-digit',
-        hour: '2-digit', minute: '2-digit',
+        hour: '2-digit', minute: '2-digit'
       };
       document.querySelectorAll('time.local-time').forEach(t => {
-        const iso = t.getAttribute('datetime');
-        // Ensure it parses as UTC (ISO string already has 'Z' or +00:00 from isoformat())
+        const iso = t.getAttribute('datetime');  // should be UTC ISO (ends with Z)
         const d = new Date(iso);
         if (!isNaN(d.getTime())) {
           t.textContent = new Intl.DateTimeFormat(undefined, opts).format(d);
-          // Optional: add title with the exact local TZ name
           try {
-            const z = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            t.title = d.toLocaleString() + (z ? ` (${z})` : '');
-          } catch (e) {}
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            t.title = d.toLocaleString() + (tz ? ` (${tz})` : '');
+          } catch {}
         }
       });
     })();
