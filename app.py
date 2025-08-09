@@ -650,43 +650,72 @@ def save_all_predictions():
 def leaderboard():
     update_fixtures_adaptive()
 
-    # Compute available + current season
+    # Get available seasons and detect current season
     seasons = seasons_available()
     current_season = current_season_from_db() or (seasons[-1] if seasons else None)
 
-    # Default scope is SEASON
+    # Get requested scope, season, and matchday
     raw_scope = request.args.get('scope')
     scope = (raw_scope or 'season').lower()
+    season = request.args.get('season')
+    matchday = request.args.get('matchday', type=int)
 
-    # If the user opened /leaderboard with no params, redirect to canonical Season URL
+    # --- Default redirect if no scope ---
     if raw_scope is None and current_season:
+        # Default to Season leaderboard for current season
         return redirect(url_for('leaderboard', scope='season', season=current_season))
 
-    season = request.args.get('season') or current_season
-    matchday = request.args.get('matchday')
-
-    # ---- Matchday scope (unchanged) ----
-    if scope == 'week' and season:
+    # --- Matchday scope ---
+    if scope == 'week':
+        # Default to current season if missing
+        if not season:
+            season = current_season
         days = matchdays_for(season)
+
+        # Default to current matchday if missing
         if not matchday:
             matchday = latest_completed_matchday(season) or (days[-1] if days else None)
+
         rows = weekly_user_points(season, matchday) if matchday else []
         users_sorted = [{'username': r[1], 'points': int(r[2])} for r in rows]
-        return render_template('leaderboard.html',
-                               users=users_sorted,
-                               scope='week',
-                               seasons=seasons, season=season,
-                               matchdays=days, matchday=matchday)
 
-    # ---- Season scope (default) ----
-    if scope == 'season' and season:
+        return render_template(
+            'leaderboard.html',
+            users=users_sorted,
+            scope='week',
+            seasons=seasons,
+            season=season,
+            matchdays=days,
+            matchday=matchday
+        )
+
+    # --- Season scope ---
+    if scope == 'season':
+        if not season:
+            season = current_season
         users_sorted = season_user_points(season)
-        return render_template('leaderboard.html',
-                               users=users_sorted,
-                               scope='season',
-                               seasons=seasons, season=season,
-                               matchdays=matchdays_for(season) if season else [],
-                               matchday=None)
+        return render_template(
+            'leaderboard.html',
+            users=users_sorted,
+            scope='season',
+            seasons=seasons,
+            season=season,
+            matchdays=matchdays_for(season) if season else [],
+            matchday=None
+        )
+
+    # --- Overall scope ---
+    users = User.query.all()
+    users_sorted = sorted(users, key=lambda u: (-u.points, u.username.lower()))
+    return render_template(
+        'leaderboard.html',
+        users=users_sorted,
+        scope='overall',
+        seasons=seasons,
+        season=season or current_season,
+        matchdays=matchdays_for(season or current_season) if (season or current_season) else [],
+        matchday=matchday
+    )
 
     # ---- Overall scope (fallback) ----
     users = User.query.all()
