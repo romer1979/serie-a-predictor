@@ -441,6 +441,36 @@ def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[st
     for fixture_id, username, selection in rows:
         out.setdefault(fixture_id, []).append((username, selection))
     return out
+    
+def predictions_matrix(fixtures):
+    """Return (users_sorted, matrix) where:
+       - users_sorted: list[User] sorted by username
+       - matrix: {fixture_id: {user_id: '1'|'X'|'2'}}
+    """
+    if not fixtures:
+        return [], {}
+
+    ids = [f.id for f in fixtures]
+    rows = (
+        db.session.query(
+            Prediction.fixture_id,
+            User.id,
+            User.username,
+            Prediction.selection,
+        )
+        .join(User, User.id == Prediction.user_id)
+        .filter(Prediction.fixture_id.in_(ids))
+        .all()
+    )
+
+    # Unique users who have (or may have) picks — include everyone to keep columns stable
+    users_sorted = User.query.order_by(func.lower(User.username)).all()
+
+    matrix = {}
+    for fixture_id, uid, _uname, sel in rows:
+        matrix.setdefault(fixture_id, {})[uid] = sel
+
+    return users_sorted, matrix
 
 # -----------------------------------------------------------------------------
 # Routes
@@ -452,13 +482,15 @@ def index():
     update_fixtures_adaptive()
     fixtures = upcoming_fixtures()
     user_predictions = {p.fixture_id: p for p in current_user.predictions}
-    # NEW: add all users' predictions for visible-after-kickoff column
-    all_preds = predictions_for_fixtures(fixtures)
+
+    users_sorted, pred_matrix = predictions_matrix(fixtures)
+
     return render_template(
         'index.html',
         fixtures=fixtures,
         user_predictions=user_predictions,
-        all_preds=all_preds,  # <-- pass to template
+        users_sorted=users_sorted,   # <-- add
+        pred_matrix=pred_matrix,     # <-- add
     )
 
 @app.route('/predict/<int:fixture_id>', methods=['POST'])
