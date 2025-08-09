@@ -303,6 +303,55 @@ def update_fixtures() -> None:
 
     db.session.commit()
     evaluate_predictions()
+def seasons_available() -> list[str]:
+    rows = db.session.query(Fixture.season).distinct().all()
+    return sorted([r[0] for r in rows])
+
+def matchdays_for(season: str) -> list[str]:
+    rows = (
+        db.session.query(Fixture.matchday)
+        .filter(Fixture.season == season)
+        .distinct()
+        .all()
+    )
+    # keep as strings to match your storage; filter out None/'' then sort numerically if possible
+    days = [r[0] for r in rows if r[0]]
+    try:
+        return [str(x) for x in sorted({int(d) for d in days})]
+    except Exception:
+        return sorted(set(days))
+
+def latest_completed_matchday(season: str) -> str | None:
+    # Pick the highest matchday that has at least one FINISHED fixture
+    rows = (
+        db.session.query(Fixture.matchday)
+        .filter(Fixture.season == season, Fixture.status == 'FINISHED')
+        .distinct()
+        .all()
+    )
+    days = [r[0] for r in rows if r[0]]
+    if not days:
+        return None
+    try:
+        return str(max(int(d) for d in days))
+    except Exception:
+        return sorted(set(days))[-1]
+
+def weekly_user_points(season: str, matchday: str):
+    # returns list of tuples: (user_id, username, points) for that week
+    rows = (
+        db.session.query(
+            User.id,
+            User.username,
+            func.coalesce(func.sum(Prediction.points_awarded), 0).label("pts"),
+        )
+        .join(Prediction, Prediction.user_id == User.id)
+        .join(Fixture, Fixture.id == Prediction.fixture_id)
+        .filter(Fixture.season == season, Fixture.matchday == str(matchday))
+        .group_by(User.id, User.username)
+        .all()
+    )
+    return sorted(rows, key=lambda r: (-r[2], r[1].lower()))
 
 # --- Adaptive fetch throttle ---
 FETCH_STATE = {"last_run": None, "last_interval": None}
@@ -489,10 +538,34 @@ def save_all_predictions():
 @login_required
 def leaderboard():
     update_fixtures_adaptive()
-    users = User.query.all()
-    users_sorted = sorted(users, key=lambda u: (-u.points, u.username.lower()))
-    return render_template('leaderboard.html', users=users_sorted)
 
+    scope = (request.args.get('scope') or 'overall').lower()  # 'overall' | 'week'
+    seasons = seasons_available()
+    season = request.args.get('season') or (seasons[-1] if seasons else None)
+    matchday = request.args.get('matchday')
+
+    if scope == 'week' and season:
+        days = matchdays_for(season)
+        if not matchday:
+            matchday = latest_completed_matchday(season) or (days[-1] if days else None)
+        rows = weekly_user_points(season, matchday) if matchday else []
+        # rows: (user_id, username, pts)
+        users_sorted = [{'username': r[1], 'points': int(r[2])} for r in rows]
+        return render_template('leaderboard.html',
+                               users=users_sorted,
+                               scope='week',
+                               seasons=seasons, season=season,
+                               matchdays=days, matchday=matchday)
+    else:
+        # overall (existing behavior)
+        users = User.query.all()
+        users_sorted = sorted(users, key=lambda u: (-u.points, u.username.lower()))
+        return render_template('leaderboard.html',
+                               users=users_sorted,
+                               scope='overall',
+                               seasons=seasons, season=season,
+                               matchdays=matchdays_for(season) if season else [],
+                               matchday=matchday)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -560,8 +633,6 @@ def register():
             return render_template('register.html')
     return render_template('register.html')
 
-
-
 @app.route('/admin', methods=['GET', 'POST'])
 @login_required
 def admin():
@@ -579,6 +650,51 @@ def admin():
                 flash('Invite created.', 'success')
     invites = Invite.query.all()
     return render_template('admin.html', invites=invites)
+
+@app.route('/history')
+@login_required
+def history():
+    update_fixtures_adaptive()  # keep data fresh
+
+    seasons = seasons_available()
+    if not seasons:
+        flash("No seasons available yet.", "warning")
+        return render_template('history.html', seasons=[], matchdays=[], season=None, matchday=None,
+                               fixtures=[], all_preds={}, weekly_rows=[])
+
+    season = request.args.get('season') or seasons[-1]  # default to latest season lexically
+    days = matchdays_for(season)
+    if not days:
+        flash("No matchdays for that season yet.", "warning")
+        return render_template('history.html', seasons=seasons, matchdays=[], season=season, matchday=None,
+                               fixtures=[], all_preds={}, weekly_rows=[])
+
+    # default to latest completed matchday if not provided, else latest available
+    matchday = request.args.get('matchday')
+    if not matchday:
+        matchday = latest_completed_matchday(season) or days[-1]
+
+    # fixtures of that week
+    fixtures = (
+        Fixture.query
+        .filter(Fixture.season == season, Fixture.matchday == str(matchday))
+        .order_by(Fixture.match_date.asc())
+        .all()
+    )
+
+    all_preds = predictions_for_fixtures(fixtures)
+    weekly_rows = weekly_user_points(season, matchday)
+
+    return render_template(
+        'history.html',
+        seasons=seasons,
+        matchdays=days,
+        season=season,
+        matchday=matchday,
+        fixtures=fixtures,
+        all_preds=all_preds,
+        weekly_rows=weekly_rows,
+    )
 
 # --- Admin: list users, delete user, reset password ---
 
