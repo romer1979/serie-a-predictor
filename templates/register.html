@@ -1,15 +1,11 @@
 {% extends 'layout.html' %}
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-md-6 col-lg-4">
+  <div class="col-md-6 col-lg-5">
     <div class="card shadow-sm">
       <div class="card-body">
-        <h1 class="h4 mb-3">Register</h1>
-        <form method="post" action="{{ url_for('register') }}">
-          <div class="mb-3">
-            <label class="form-label">Invite Code</label>
-            <input name="invite" class="form-control" required>
-          </div>
+        <h1 class="h4 mb-3">Create Account</h1>
+        <form method="post" autocomplete="off" novalidate>
           <div class="mb-3">
             <label class="form-label">Username</label>
             <input name="username" class="form-control" required>
@@ -18,10 +14,10 @@
             <label class="form-label">Password</label>
             <input name="password" type="password" class="form-control" required>
           </div>
-          <button class="btn btn-success w-100" type="submit">Create account</button>
+          <button class="btn btn-primary w-100">Sign Up</button>
         </form>
-        <div class="text-center mt-3">
-          <a href="{{ url_for('login') }}">Back to login</a>
+        <div class="text-secondary small mt-2">
+          Already have an account? <a href="{{ url_for('login') }}">Log in</a>
         </div>
       </div>
     </div>
