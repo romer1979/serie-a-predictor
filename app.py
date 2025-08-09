@@ -100,7 +100,26 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+@app.template_filter('utc_iso')
+def utc_iso(dt):
+    """
+    Normalize a fixture datetime to an ISO string in UTC with a 'Z' suffix.
 
+    Legacy rows in your DB may be naive (no tz) but were saved as America/New_York
+    wall time. We treat naive values as America/New_York, then convert to UTC.
+    If tz-aware, we just convert to UTC.
+    """
+    if dt is None:
+        return ''
+    if dt.tzinfo is None:
+        # Legacy: stored as local Eastern wall time
+        dt = dt.replace(tzinfo=ZoneInfo('America/New_York'))
+    dt_utc = dt.astimezone(timezone.utc)
+    s = dt_utc.isoformat()
+    if s.endswith('+00:00'):
+        s = s[:-6] + 'Z'
+    return s
+    
 # -----------------------------------------------------------------------------
 # Models
 #
