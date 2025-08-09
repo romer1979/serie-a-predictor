@@ -650,11 +650,22 @@ def save_all_predictions():
 def leaderboard():
     update_fixtures_adaptive()
 
-    scope = (request.args.get('scope') or 'overall').lower()  # 'overall' | 'season' | 'week'
+    # Compute available + current season
     seasons = seasons_available()
-    season = request.args.get('season') or (seasons[-1] if seasons else None)
+    current_season = current_season_from_db() or (seasons[-1] if seasons else None)
+
+    # Default scope is SEASON
+    raw_scope = request.args.get('scope')
+    scope = (raw_scope or 'season').lower()
+
+    # If the user opened /leaderboard with no params, redirect to canonical Season URL
+    if raw_scope is None and current_season:
+        return redirect(url_for('leaderboard', scope='season', season=current_season))
+
+    season = request.args.get('season') or current_season
     matchday = request.args.get('matchday')
 
+    # ---- Matchday scope (unchanged) ----
     if scope == 'week' and season:
         days = matchdays_for(season)
         if not matchday:
@@ -667,6 +678,7 @@ def leaderboard():
                                seasons=seasons, season=season,
                                matchdays=days, matchday=matchday)
 
+    # ---- Season scope (default) ----
     if scope == 'season' and season:
         users_sorted = season_user_points(season)
         return render_template('leaderboard.html',
@@ -676,7 +688,7 @@ def leaderboard():
                                matchdays=matchdays_for(season) if season else [],
                                matchday=None)
 
-    # default: overall across all seasons
+    # ---- Overall scope (fallback) ----
     users = User.query.all()
     users_sorted = sorted(users, key=lambda u: (-u.points, u.username.lower()))
     return render_template('leaderboard.html',
