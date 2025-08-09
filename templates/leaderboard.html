@@ -1,62 +1,72 @@
 {% extends 'layout.html' %}
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
-  <h1 class="h4 mb-0">Leaderboard</h1>
-</div>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">Leaderboard</h1>
 
-<form class="row g-2 align-items-end mb-3" method="get" action="{{ url_for('leaderboard') }}">
-  <div class="col-auto">
-    <label class="form-label small text-secondary">Scope</label>
-    <select name="scope" class="form-select form-select-sm" onchange="this.form.submit()">
-      <option value="overall" {% if scope=='overall' %}selected{% endif %}>Overall</option>
-      <option value="week" {% if scope=='week' %}selected{% endif %}>Matchday</option>
-    </select>
+    <form class="d-flex gap-2 align-items-center" method="get" action="{{ url_for('leaderboard') }}">
+      <select class="form-select form-select-sm" name="scope" onchange="this.form.submit()">
+        <option value="overall" {% if scope == 'overall' %}selected{% endif %}>Overall (all seasons)</option>
+        <option value="season"  {% if scope == 'season'  %}selected{% endif %}>Season</option>
+        <option value="week"    {% if scope == 'week'    %}selected{% endif %}>Matchday</option>
+      </select>
+
+      {# season chooser for 'season' and 'week' scopes #}
+      {% if scope in ['season', 'week'] %}
+        <select class="form-select form-select-sm" name="season" onchange="this.form.submit()">
+          {% for s in seasons %}
+            <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      {% endif %}
+
+      {# matchday chooser only for 'week' scope #}
+      {% if scope == 'week' %}
+        <select class="form-select form-select-sm" name="matchday" onchange="this.form.submit()">
+          {% for md in matchdays %}
+            <option value="{{ md }}" {% if md == matchday %}selected{% endif %}>MD {{ md }}</option>
+          {% endfor %}
+        </select>
+      {% endif %}
+
+      <noscript><button class="btn btn-sm btn-primary" type="submit">Go</button></noscript>
+    </form>
   </div>
 
-  {% if scope == 'week' %}
-    <div class="col-auto">
-      <label class="form-label small text-secondary">Season</label>
-      <select name="season" class="form-select form-select-sm" onchange="this.form.submit()">
-        {% for s in seasons %}
-          <option value="{{ s }}" {% if s==season %}selected{% endif %}>{{ s }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-auto">
-      <label class="form-label small text-secondary">Matchday</label>
-      <select name="matchday" class="form-select form-select-sm" onchange="this.form.submit()">
-        {% for d in matchdays %}
-          <option value="{{ d }}" {% if d==matchday %}selected{% endif %}>{{ d }}</option>
-        {% endfor %}
-      </select>
-    </div>
+  {% if scope == 'overall' %}
+    <div class="text-secondary small mb-2">Overall = all predictions across all seasons.</div>
+  {% elif scope == 'season' %}
+    <div class="text-secondary small mb-2">Season {{ season }} ranking.</div>
+  {% elif scope == 'week' %}
+    <div class="text-secondary small mb-2">Season {{ season }} · Matchday {{ matchday }} ranking.</div>
   {% endif %}
 
-  <div class="col-auto">
-    <button class="btn btn-sm btn-primary">Go</button>
-  </div>
-</form>
-
-<div class="card shadow-sm">
-  <div class="card-body p-0">
-    <table class="table table-hover mb-0">
-      <thead class="table-light-subtle">
-        <tr>
-          <th>Rank</th>
-          <th>User</th>
-          <th>Points{% if scope=='week' %} (MD {{ matchday }}){% endif %}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in users %}
-          <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ u.username if u.username is defined else u['username'] }}</td>
-            <td class="fw-semibold">{{ u.points if u.points is defined else u['points'] }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+  {% if not users %}
+    <div class="alert alert-secondary">No data yet.</div>
+  {% else %}
+    <div class="card shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light-subtle">
+            <tr>
+              <th style="width: 80px;">Rank</th>
+              <th>Username</th>
+              <th style="width: 140px;">Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in users %}
+              {# item is either a User object (overall) or a dict with username/points (season/week) #}
+              {% set uname = item.username if item.username is defined else item['username'] %}
+              {% set pts   = item.points   if item.points   is defined else item['points'] %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td class="fw-semibold">{{ uname }}</td>
+                <td class="fw-bold">{{ pts }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {% endif %}
 {% endblock %}
