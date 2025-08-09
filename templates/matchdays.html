@@ -1,0 +1,60 @@
+{% extends 'layout.html' %}
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h1 class="h3 mb-0">Matchdays — {{ season }}</h1>
+    <div class="text-secondary small">Jump to any past, live, or upcoming week.</div>
+  </div>
+  <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">Back to Upcoming</a>
+</div>
+
+{% macro md_button(md, tone) -%}
+  <a href="{{ url_for('history', season=season, matchday=md) }}"
+     class="btn btn-{{ tone }} btn-sm me-2 mb-2">MD {{ md }}</a>
+{%- endmacro %}
+
+{% if live %}
+  <div class="mb-3">
+    <div class="fw-semibold mb-2">Live</div>
+    {% for md in live %}
+      {{ md_button(md, 'warning') }}
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if next_two %}
+  <div class="mb-3">
+    <div class="fw-semibold mb-2">Next Up</div>
+    {% for md in next_two %}
+      {{ md_button(md, 'primary') }}
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if finished %}
+  <div class="mb-3">
+    <div class="fw-semibold mb-2">Finished (Past)</div>
+    {% for md in finished %}
+      {{ md_button(md, 'outline-secondary') }}
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if remaining_upcoming %}
+  <div class="mb-3">
+    <div class="fw-semibold mb-2">Upcoming (Later)</div>
+    {% for md in remaining_upcoming %}
+      {{ md_button(md, 'outline-primary') }}
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if rest %}
+  <div class="mb-3">
+    <div class="fw-semibold mb-2">Other</div>
+    {% for md in rest %}
+      {{ md_button(md, 'outline-light') }}
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}
