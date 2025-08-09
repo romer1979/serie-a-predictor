@@ -102,18 +102,11 @@ login_manager.login_view = 'login'
 
 @app.template_filter('utc_iso')
 def utc_iso(dt):
-    """
-    Normalize a fixture datetime to an ISO string in UTC with a 'Z' suffix.
-
-    Legacy rows in your DB may be naive (no tz) but were saved as America/New_York
-    wall time. We treat naive values as America/New_York, then convert to UTC.
-    If tz-aware, we just convert to UTC.
-    """
     if dt is None:
         return ''
     if dt.tzinfo is None:
         # Treat naive datetimes as Italy time
-        dt = dt.replace(tzinfo=ZoneInfo('Europe/Rome'))
+        dt = dt.replace(tzinfo=timezone.utc)
     dt_utc = dt.astimezone(timezone.utc)
     s = dt_utc.isoformat()
     if s.endswith('+00:00'):
