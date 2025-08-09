@@ -49,10 +49,10 @@
   </div>
 {% endif %}
 
-{% if rest %}
+{% if other %}
   <div class="mb-3">
     <div class="fw-semibold mb-2">Other</div>
-    {% for md in rest %}
+    {% for md in other %}
       {{ md_button(md, 'outline-light') }}
     {% endfor %}
   </div>
