@@ -25,8 +25,12 @@
                 Admin
               </a>
               <ul class="dropdown-menu">
-                <li><a class="dropdown-item" href="{{ url_for('admin') }}">Invite Codes</a></li>
                 <li><a class="dropdown-item" href="{{ url_for('admin_users') }}">Users</a></li>
+                <li>
+                  <form class="px-3 py-1" method="post" action="{{ url_for('admin_refresh') }}">
+                    <button class="btn btn-sm btn-outline-primary w-100">Refresh Fixtures</button>
+                  </form>
+                </li>
               </ul>
             </li>
           {% endif %}
@@ -74,22 +78,20 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Local time converter for kickoff times + label updater -->
 <script>
-(function () {
-  const fmt = { weekday: 'short', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' };
-  const tz  = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const label = document.getElementById('tz-label');
-  if (label) label.textContent = `Times in ${tz}`;
-
-  document.querySelectorAll('time.kickoff').forEach(el => {
-    const iso = el.getAttribute('datetime');
-    if (!iso) return;
+/* Convert any UTC ISO string to viewer local time */
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('[data-utc]').forEach(el => {
+    const iso = el.getAttribute('data-utc');
     const d = new Date(iso);
-    el.textContent = d.toLocaleString(undefined, fmt);
-    el.title = `Your time zone: ${tz}`;
+    if (!isNaN(d)) {
+      el.textContent = d.toLocaleString(undefined, {
+        weekday: 'short', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit'
+      });
+    }
   });
-})();
+});
 </script>
 </body>
 </html>
