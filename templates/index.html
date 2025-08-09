@@ -10,33 +10,53 @@
   {% else %}
     <div class="card shadow-sm">
       <div class="card-body p-0">
-        <!-- ONE form for all fixtures -->
         <form method="post" action="{{ url_for('save_all_predictions') }}" autocomplete="off" novalidate>
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
               <thead class="table-light-subtle">
                 <tr>
-                  <th style="width: 200px;">Date &amp; Time</th>
+                  <th style="width: 200px;">Date & Time</th>
                   <th>Match</th>
                   <th style="width: 260px;">Your Pick</th>
                   <th style="width: 160px;">Result / Status</th>
-                  <th style="width: 320px;">Predictions</th>
+
+                  {# Dynamic user columns #}
+                  {% if users_cols and users_cols|length > 0 %}
+                    <th class="text-center" colspan="{{ users_cols|length }}">
+                      Predictions (revealed at kickoff)
+                    </th>
+                  {% else %}
+                    <th class="text-center">Predictions</th>
+                  {% endif %}
+                </tr>
+
+                {# Second header row: usernames as column headers #}
+                <tr>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  <th></th>
+                  {% if users_cols and users_cols|length > 0 %}
+                    {% for uid, uname in users_cols %}
+                      <th class="text-center text-truncate" style="min-width: 90px;" title="{{ uname }}">{{ uname }}</th>
+                    {% endfor %}
+                  {% else %}
+                    <th class="text-secondary small text-center">No predictions yet</th>
+                  {% endif %}
                 </tr>
               </thead>
+
               <tbody>
                 {% for f in fixtures %}
                   {% set myp = user_predictions.get(f.id) %}
+                  {% set show_now = show_preds_flags.get(f.id) %}
                   <tr>
                     <td class="text-nowrap">
-                      <time class="local-time" datetime="{{ f.match_date|utc_iso }}">
-                        {{ f.match_date|utc_iso }}
-                      </time>
+                      <time class="local-time" datetime="{{ f.match_date|utc_iso }}">{{ f.match_date|utc_iso }}</time>
                     </td>
 
                     <td>
-                      <div class="fw-semibold">
-                        {{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}
-                      </div>
+                      <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
                       <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
                     </td>
 
@@ -82,29 +102,28 @@
                       {% endif %}
                     </td>
 
-                    <td>
-                      {% set show_preds_now = (not f.is_open_for_prediction()) %}
-                      {% if not show_preds_now %}
-                        <span class="text-secondary">Hidden until kickoff</span>
-                      {% else %}
-                        {% set plist = all_preds.get(f.id, []) %}
-                        {% if not plist %}
-                          <span class="text-secondary">No predictions</span>
-                        {% else %}
-                          <div class="small">
-                            {% for uname, sel in plist %}
-                              <span class="badge rounded-pill text-bg-dark me-1 mb-1">{{ uname }}: {{ sel }}</span>
-                            {% endfor %}
-                          </div>
-                        {% endif %}
-                      {% endif %}
-                    </td>
+                    {# Matrix cells: one per user #}
+                    {% if users_cols and users_cols|length > 0 %}
+                      {% for uid, uname in users_cols %}
+                        <td class="text-center">
+                          {% if show_now %}
+                            {% set pick = pred_matrix.get((f.id, uid)) %}
+                            {% if pick %}<span class="fw-semibold">{{ pick }}</span>{% else %}<span class="text-secondary">—</span>{% endif %}
+                          {% else %}
+                            <span class="text-secondary small">•</span>
+                          {% endif %}
+                        </td>
+                      {% endfor %}
+                    {% else %}
+                      <td class="text-secondary text-center">—</td>
+                    {% endif %}
                   </tr>
                 {% endfor %}
               </tbody>
+
               <tfoot>
                 <tr>
-                  <td colspan="5" class="text-end p-3">
+                  <td colspan="{{ 4 + (users_cols|length if users_cols else 1) }}" class="text-end p-3">
                     <button type="submit" class="btn btn-primary">Save All Predictions</button>
                   </td>
                 </tr>
@@ -116,22 +135,19 @@
     </div>
   {% endif %}
 
-  <!-- Converts UTC ISO in <time datetime="..."> to viewer's local time -->
   <script>
+    // Convert all <time.local-time datetime="...Z"> to the viewer's local TZ
     (function () {
-      const opts = {
-        weekday: 'short', month: 'short', day: '2-digit',
-        hour: '2-digit', minute: '2-digit'
-      };
+      const opts = { weekday:'short', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit' };
       document.querySelectorAll('time.local-time').forEach(t => {
-        const iso = t.getAttribute('datetime');  // should be UTC ISO (ends with Z)
+        const iso = t.getAttribute('datetime');
         const d = new Date(iso);
         if (!isNaN(d.getTime())) {
           t.textContent = new Intl.DateTimeFormat(undefined, opts).format(d);
           try {
             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
             t.title = d.toLocaleString() + (tz ? ` (${tz})` : '');
-          } catch {}
+          } catch (e) {}
         }
       });
     })();
