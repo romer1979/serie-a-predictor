@@ -436,9 +436,6 @@ def upcoming_fixtures() -> list[Fixture]:
         merged[f.id] = f
     return sorted(merged.values(), key=lambda f: f.match_date)
 
-
-
-
 def evaluate_predictions() -> None:
     """
     Iterate through predictions and award points for matches that have finished
@@ -559,6 +556,27 @@ def prediction_matrix(fixtures):
 
     return users, matrix, show_flags
 
+def season_user_points(season: str):
+    """
+    Return list of dicts [{username, points}] for the given season,
+    ordered by points desc then username asc.
+    """
+    rows = (
+        db.session.query(
+            User.username,
+            func.coalesce(func.sum(Prediction.points_awarded), 0).label("pts"),
+        )
+        .join(Prediction, Prediction.user_id == User.id)
+        .join(Fixture, Fixture.id == Prediction.fixture_id)
+        .filter(Fixture.season == season)
+        .group_by(User.username)
+        .all()
+    )
+    return sorted(
+        [{'username': r[0], 'points': int(r[1])} for r in rows],
+        key=lambda x: (-x['points'], x['username'].lower())
+    )
+
 # -----------------------------------------------------------------------------
 # Routes
 #
@@ -632,7 +650,7 @@ def save_all_predictions():
 def leaderboard():
     update_fixtures_adaptive()
 
-    scope = (request.args.get('scope') or 'overall').lower()  # 'overall' | 'week'
+    scope = (request.args.get('scope') or 'overall').lower()  # 'overall' | 'season' | 'week'
     seasons = seasons_available()
     season = request.args.get('season') or (seasons[-1] if seasons else None)
     matchday = request.args.get('matchday')
@@ -642,23 +660,31 @@ def leaderboard():
         if not matchday:
             matchday = latest_completed_matchday(season) or (days[-1] if days else None)
         rows = weekly_user_points(season, matchday) if matchday else []
-        # rows: (user_id, username, pts)
         users_sorted = [{'username': r[1], 'points': int(r[2])} for r in rows]
         return render_template('leaderboard.html',
                                users=users_sorted,
                                scope='week',
                                seasons=seasons, season=season,
                                matchdays=days, matchday=matchday)
-    else:
-        # overall (existing behavior)
-        users = User.query.all()
-        users_sorted = sorted(users, key=lambda u: (-u.points, u.username.lower()))
+
+    if scope == 'season' and season:
+        users_sorted = season_user_points(season)
         return render_template('leaderboard.html',
                                users=users_sorted,
-                               scope='overall',
+                               scope='season',
                                seasons=seasons, season=season,
                                matchdays=matchdays_for(season) if season else [],
-                               matchday=matchday)
+                               matchday=None)
+
+    # default: overall across all seasons
+    users = User.query.all()
+    users_sorted = sorted(users, key=lambda u: (-u.points, u.username.lower()))
+    return render_template('leaderboard.html',
+                           users=users_sorted,
+                           scope='overall',
+                           seasons=seasons, season=season,
+                           matchdays=matchdays_for(season) if season else [],
+                           matchday=matchday)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
