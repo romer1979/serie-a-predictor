@@ -2,7 +2,7 @@
 {% block content %}
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h1 class="h3 mb-0">Upcoming Fixtures</h1>
-    <span id="tz-label" class="text-secondary small">Times in your local timezone</span>
+    <span class="text-secondary small">Times in your local time</span>
   </div>
 
   {% if not fixtures %}
@@ -16,10 +16,10 @@
             <table class="table table-hover align-middle mb-0">
               <thead class="table-light-subtle">
                 <tr>
-                  <th style="width: 150px;">Date & Time</th>
+                  <th style="width: 170px;">Date & Time</th>
                   <th>Match</th>
                   <th style="width: 260px;">Your Pick</th>
-                  <th style="width: 160px;">Result / Status</th>
+                  <th style="width: 260px;">Result / Status</th>
                   <th style="width: 320px;">Predictions</th>
                 </tr>
               </thead>
@@ -27,14 +27,16 @@
                 {% for f in fixtures %}
                   {% set myp = user_predictions.get(f.id) %}
                   <tr>
+                    <!-- Local-time rendering: JS will convert from UTC -->
                     <td class="text-nowrap">
-                      <time class="kickoff"
-                            datetime="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=namespace.utc)).isoformat() }}">
-                        {{ (f.match_date.astimezone(namespace.utc) if f.match_date.tzinfo else f.match_date.replace(tzinfo=namespace.utc)).strftime('%Y-%m-%d %H:%M UTC') }}
-                      </time>
+                      <span class="localtime"
+                            data-utc="{{ f.match_date.isoformat() }}">{{ f.match_date.strftime('%a %b %d, %H:%M') }}</span>
                     </td>
+
                     <td>
-                      <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
+                      <div class="fw-semibold">
+                        {{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}
+                      </div>
                       <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
                     </td>
 
@@ -78,6 +80,25 @@
                       {% else %}
                         <span class="badge text-bg-light text-secondary">{{ f.status }}</span>
                       {% endif %}
+
+                      {% if current_user.is_admin %}
+                        <!-- Admin-only simulate controls -->
+                        <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
+                          <!-- Simulate LIVE -->
+                          <form method="post" action="{{ url_for('admin_simulate_live', fixture_id=f.id) }}" class="d-flex gap-2">
+                            <input type="number" name="home_score" class="form-control form-control-sm" style="width:70px" placeholder="H">
+                            <input type="number" name="away_score" class="form-control form-control-sm" style="width:70px" placeholder="A">
+                            <button class="btn btn-sm btn-outline-warning" type="submit">Sim LIVE</button>
+                          </form>
+
+                          <!-- Finish -->
+                          <form method="post" action="{{ url_for('admin_finish_fixture', fixture_id=f.id) }}" class="d-flex gap-2">
+                            <input type="number" name="home_score" class="form-control form-control-sm" style="width:70px" placeholder="H" required>
+                            <input type="number" name="away_score" class="form-control form-control-sm" style="width:70px" placeholder="A" required>
+                            <button class="btn btn-sm btn-success" type="submit">Finish</button>
+                          </form>
+                        </div>
+                      {% endif %}
                     </td>
 
                     <td>
@@ -104,6 +125,11 @@
                 <tr>
                   <td colspan="5" class="text-end p-3">
                     <button type="submit" class="btn btn-primary">Save All Predictions</button>
+                    {% if current_user.is_admin %}
+                      <form method="post" action="{{ url_for('admin_refresh') }}" class="d-inline ms-2">
+                        <button type="submit" class="btn btn-outline-secondary">Refresh Fixtures</button>
+                      </form>
+                    {% endif %}
                   </td>
                 </tr>
               </tfoot>
@@ -113,4 +139,23 @@
       </div>
     </div>
   {% endif %}
+
+  <!-- Local-time conversion script (runs on this page) -->
+  <script>
+    (function () {
+      const els = document.querySelectorAll('.localtime[data-utc]');
+      els.forEach(el => {
+        try {
+          const s = el.getAttribute('data-utc');
+          // Normalize Z -> +00:00 for Safari compatibility if needed
+          const iso = s.endsWith('Z') ? s.replace('Z', '+00:00') : s;
+          const d = new Date(iso);
+          if (!isNaN(d.valueOf())) {
+            const opts = { weekday: 'short', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' };
+            el.textContent = d.toLocaleString(undefined, opts);
+          }
+        } catch (_) {}
+      });
+    })();
+  </script>
 {% endblock %}
