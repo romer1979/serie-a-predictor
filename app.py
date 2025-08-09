@@ -740,6 +740,7 @@ def history():
         fixtures=fixtures,
         all_preds=all_preds,
         weekly_rows=weekly_rows,
+        utc_now=datetime.now(timezone.utc),
     )
 @app.route('/season/<season>/matchdays')
 @login_required
