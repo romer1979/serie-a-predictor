@@ -2,7 +2,7 @@
 {% block content %}
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h1 class="h3 mb-0">Upcoming Fixtures</h1>
-    <span class="text-secondary small">Times shown in your local time</span>
+    <span class="text-secondary small">Times shown in your local timezone</span>
   </div>
 
   {% if not fixtures %}
@@ -15,25 +15,32 @@
             <table class="table table-hover align-middle mb-0">
               <thead class="table-light-subtle">
                 <tr>
-                  <th rowspan="2" style="width: 170px; vertical-align: middle;">Date & Time</th>
-                  <th rowspan="2" style="vertical-align: middle;">Match</th>
-                  <th rowspan="2" style="width: 260px; vertical-align: middle;">Your Pick</th>
-                  <th rowspan="2" style="width: 160px; vertical-align: middle;">Result / Status</th>
-                  {% set colcount = users_sorted|length %}
-                  <th colspan="{{ colcount }}" class="text-center">Predictions</th>
+                  <th style="width: 180px;">Date &amp; Time</th>
+                  <th>Match</th>
+                  <th style="width: 260px;">Your Pick</th>
+                  <th style="width: 160px;">Result / Status</th>
+                  {% if user_cols and user_cols|length > 0 %}
+                    <th colspan="{{ user_cols|length }}">Predictions</th>
+                  {% else %}
+                    <th>Predictions</th>
+                  {% endif %}
                 </tr>
+                {% if user_cols and user_cols|length > 0 %}
                 <tr>
-                  {% for u in users_sorted %}
-                    <th class="text-center small fw-semibold text-secondary text-nowrap">{{ u.username }}</th>
+                  <th colspan="4"></th>
+                  {% for uid, uname in user_cols %}
+                    <th class="text-center small text-secondary">{{ uname }}</th>
                   {% endfor %}
                 </tr>
+                {% endif %}
               </thead>
               <tbody>
                 {% for f in fixtures %}
                   {% set myp = user_predictions.get(f.id) %}
-                  {% set show_preds_now = (not f.is_open_for_prediction()) or f.status in ['IN_PLAY','PAUSED','FINISHED'] %}
                   <tr>
-                    <td class="text-nowrap">{{ f.match_date.astimezone(namespace.utc).strftime('%a, %b %d at %I:%M %p') }}</td>
+                    <td class="text-nowrap">
+                      <span data-utc="{{ f.match_date.isoformat() }}"></span>
+                    </td>
                     <td>
                       <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
                       <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
@@ -81,27 +88,32 @@
                       {% endif %}
                     </td>
 
-                    {# One cell per user, showing their pick for this fixture #}
-                    {% for u in users_sorted %}
-                      {% set sel = pred_matrix.get(f.id, {}).get(u.id) %}
-                      <td class="text-center">
-                        {% if show_preds_now %}
+                    {% if user_cols and user_cols|length > 0 %}
+                      {% for uid, uname in user_cols %}
+                        {% set sel = picks_grid.get((f.id, uid)) %}
+                        {% set lp = live_points.get((f.id, uid)) %}
+                        <td class="text-center">
                           {% if sel %}
                             <span class="badge rounded-pill text-bg-dark">{{ sel }}</span>
+                            {% if lp is not none %}
+                              <div class="small mt-1 {% if lp==1 %}text-success{% else %}text-danger{% endif %}">
+                                {{ lp }}
+                              </div>
+                            {% endif %}
                           {% else %}
-                            <span class="text-secondary">—</span>
+                            <span class="text-secondary small">—</span>
                           {% endif %}
-                        {% else %}
-                          <span class="text-secondary">—</span>
-                        {% endif %}
-                      </td>
-                    {% endfor %}
+                        </td>
+                      {% endfor %}
+                    {% else %}
+                      <td class="text-secondary">No predictions</td>
+                    {% endif %}
                   </tr>
                 {% endfor %}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colspan="{{ 4 + (users_sorted|length) }}" class="text-end p-3">
+                  <td colspan="{{ 5 + (user_cols|length if user_cols else 0) }}" class="text-end p-3">
                     <button type="submit" class="btn btn-primary">Save All Predictions</button>
                   </td>
                 </tr>
