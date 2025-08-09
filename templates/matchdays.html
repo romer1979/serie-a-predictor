@@ -1,60 +1,178 @@
 {% extends 'layout.html' %}
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-3">
-  <div>
-    <h1 class="h3 mb-0">Matchdays — {{ season }}</h1>
-    <div class="text-secondary small">Jump to any past, live, or upcoming week.</div>
-  </div>
-  <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">Back to Upcoming</a>
-</div>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h1 class="h3 mb-0">Matchday {{ matchday }}</h1>
+      <div class="text-secondary small">
+        Season {{ season }} · Times shown in your local timezone
+      </div>
+    </div>
 
-{% macro md_button(md, tone) -%}
-  <a href="{{ url_for('history', season=season, matchday=md) }}"
-     class="btn btn-{{ tone }} btn-sm me-2 mb-2">MD {{ md }}</a>
-{%- endmacro %}
+    <div class="d-flex gap-2">
+      {% if prev_matchday %}
+        <a class="btn btn-outline-light btn-sm"
+           href="{{ url_for('matchday_view', season=season, matchday=prev_matchday) }}">
+          ‹ MD {{ prev_matchday }}
+        </a>
+      {% endif %}
+      {% if next_matchday %}
+        <a class="btn btn-outline-light btn-sm"
+           href="{{ url_for('matchday_view', season=season, matchday=next_matchday) }}">
+          MD {{ next_matchday }} ›
+        </a>
+      {% endif %}
 
-{% if live %}
-  <div class="mb-3">
-    <div class="fw-semibold mb-2">Live</div>
-    {% for md in live %}
-      {{ md_button(md, 'warning') }}
-    {% endfor %}
+      {% if md_choices %}
+        <form method="get" action="{{ url_for('matchdays_current') }}">
+          <select class="form-select form-select-sm" name="md"
+                  onchange="if(this.value){window.location=this.value;}">
+            {% for md in md_choices %}
+              <option value="{{ url_for('matchday_view', season=season, matchday=md) }}"
+                      {% if md == matchday %}selected{% endif %}>
+                Matchday {{ md }}
+              </option>
+            {% endfor %}
+          </select>
+        </form>
+      {% endif %}
+    </div>
   </div>
-{% endif %}
 
-{% if next_two %}
-  <div class="mb-3">
-    <div class="fw-semibold mb-2">Next Up</div>
-    {% for md in next_two %}
-      {{ md_button(md, 'primary') }}
-    {% endfor %}
-  </div>
-{% endif %}
+  {% if not fixtures %}
+    <div class="alert alert-secondary">No fixtures found for this matchday.</div>
+  {% else %}
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        <!-- One form to save all predictions on this matchday -->
+        <form method="post" action="{{ url_for('save_all_predictions') }}" autocomplete="off" novalidate>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+              <thead class="table-light-subtle">
+                <tr>
+                  <th style="width: 200px;">Date & Time</th>
+                  <th>Match</th>
+                  <th style="width: 260px;">Your Pick</th>
+                  <th style="width: 160px;">Result / Status</th>
+                  <th style="width: 340px;">Predictions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for f in fixtures %}
+                  {% set myp = user_predictions.get(f.id) %}
+                  <tr>
+                    <td class="text-nowrap">
+                      <time class="local-time" datetime="{{ f.match_date|utc_iso }}">
+                        {{ f.match_date|utc_iso }}
+                      </time>
+                    </td>
 
-{% if finished %}
-  <div class="mb-3">
-    <div class="fw-semibold mb-2">Finished (Past)</div>
-    {% for md in finished %}
-      {{ md_button(md, 'outline-secondary') }}
-    {% endfor %}
-  </div>
-{% endif %}
+                    <td>
+                      <div class="fw-semibold">
+                        {{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}
+                      </div>
+                      <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
+                    </td>
 
-{% if remaining_upcoming %}
-  <div class="mb-3">
-    <div class="fw-semibold mb-2">Upcoming (Later)</div>
-    {% for md in remaining_upcoming %}
-      {{ md_button(md, 'outline-primary') }}
-    {% endfor %}
-  </div>
-{% endif %}
+                    <td>
+                      {% if f.is_open_for_prediction() %}
+                        <div class="d-inline-flex flex-wrap gap-3 mb-0">
+                          <div class="form-check">
+                            <input class="form-check-input" type="radio"
+                                   name="fixture_{{ f.id }}" id="p1-{{ f.id }}" value="1"
+                                   {% if myp and myp.selection == '1' %}checked{% endif %}>
+                            <label class="form-check-label" for="p1-{{ f.id }}">1</label>
+                          </div>
+                          <div class="form-check">
+                            <input class="form-check-input" type="radio"
+                                   name="fixture_{{ f.id }}" id="px-{{ f.id }}" value="X"
+                                   {% if myp and myp.selection == 'X' %}checked{% endif %}>
+                            <label class="form-check-label" for="px-{{ f.id }}">X</label>
+                          </div>
+                          <div class="form-check">
+                            <input class="form-check-input" type="radio"
+                                   name="fixture_{{ f.id }}" id="p2-{{ f.id }}" value="2"
+                                   {% if myp and myp.selection == '2' %}checked{% endif %}>
+                            <label class="form-check-label" for="p2-{{ f.id }}">2</label>
+                          </div>
+                        </div>
+                      {% else %}
+                        {% if myp %}
+                          <span class="badge text-bg-secondary">Locked: {{ myp.selection }}</span>
+                        {% else %}
+                          <span class="badge text-bg-secondary">Locked</span>
+                        {% endif %}
+                      {% endif %}
+                    </td>
 
-{% if other %}
-  <div class="mb-3">
-    <div class="fw-semibold mb-2">Other</div>
-    {% for md in other %}
-      {{ md_button(md, 'outline-light') }}
-    {% endfor %}
-  </div>
-{% endif %}
+                    <td>
+                      {% if f.status in ['IN_PLAY', 'PAUSED'] %}
+                        <span class="badge text-bg-warning text-dark">LIVE</span>
+                        {% if f.home_score is not none and f.away_score is not none %}
+                          <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
+                        {% endif %}
+                      {% elif f.status == 'FINISHED' %}
+                        <span class="badge text-bg-success">FT</span>
+                        <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
+                      {% else %}
+                        <span class="badge text-bg-light text-secondary">{{ f.status }}</span>
+                      {% endif %}
+                    </td>
+
+                    <td>
+                      {# hide predictions until kickoff for everyone #}
+                      {% set show_preds_now = (not f.is_open_for_prediction()) %}
+                      {% if not show_preds_now %}
+                        <span class="text-secondary">Hidden until kickoff</span>
+                      {% else %}
+                        {% set plist = all_preds.get(f.id, []) %}
+                        {% if not plist %}
+                          <span class="text-secondary">No predictions</span>
+                        {% else %}
+                          <div class="small">
+                            {% for uname, sel in plist %}
+                              <span class="badge rounded-pill text-bg-dark me-1 mb-1">
+                                {{ uname }}: {{ sel }}
+                              </span>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="5" class="text-end p-3">
+                    <button type="submit" class="btn btn-primary">Save All Predictions</button>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  {# Client-side local time rendering #}
+  <script>
+    (function () {
+      const opts = {
+        weekday: 'short', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit'
+      };
+      document.querySelectorAll('time.local-time').forEach(t => {
+        const iso = t.getAttribute('datetime');  // should be UTC like ...Z
+        const d = new Date(iso);
+        if (!isNaN(d.getTime())) {
+          t.textContent = new Intl.DateTimeFormat(undefined, opts).format(d);
+          try {
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            t.title = d.toLocaleString() + (tz ? ` (${tz})` : '');
+          } catch (e) {}
+        }
+      });
+    })();
+  </script>
 {% endblock %}
