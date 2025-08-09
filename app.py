@@ -754,6 +754,56 @@ def admin_refresh():
     update_fixtures_adaptive(force=True)
     flash("Fixtures refreshed.", "success")
     return redirect(url_for('index'))
+@app.post("/admin/fixtures/<int:fixture_id>/simulate_live")
+@login_required
+def admin_simulate_live(fixture_id: int):
+    if not current_user.is_admin:
+        abort(403)
+    f = db.session.get(Fixture, fixture_id)
+    if not f:
+        flash("Fixture not found.", "danger")
+        return redirect(url_for("index"))
+    f.status = "IN_PLAY"
+    # Optional: set a quick score from form fields
+    hs = request.form.get("home_score")
+    as_ = request.form.get("away_score")
+    try:
+        f.home_score = int(hs) if hs is not None and hs != "" else f.home_score
+        f.away_score = int(as_) if as_ is not None and as_ != "" else f.away_score
+    except ValueError:
+        pass
+    db.session.add(f)
+    db.session.commit()
+    flash("Fixture set to LIVE.", "success")
+    return redirect(url_for("index"))
+
+
+@app.post("/admin/fixtures/<int:fixture_id>/finish")
+@login_required
+def admin_finish_fixture(fixture_id: int):
+    if not current_user.is_admin:
+        abort(403)
+    f = db.session.get(Fixture, fixture_id)
+    if not f:
+        flash("Fixture not found.", "danger")
+        return redirect(url_for("index"))
+
+    # Require final scores
+    try:
+        f.home_score = int(request.form.get("home_score", ""))
+        f.away_score = int(request.form.get("away_score", ""))
+    except ValueError:
+        flash("Please enter valid integer scores.", "warning")
+        return redirect(url_for("index"))
+
+    f.status = "FINISHED"
+    db.session.add(f)
+    db.session.commit()
+
+    # Award points right away
+    evaluate_predictions()
+    flash("Fixture finished and points awarded.", "success")
+    return redirect(url_for("index"))
 
 # -----------------------------------------------------------------------------
 # CLI commands for setup and administration
