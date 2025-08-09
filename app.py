@@ -159,12 +159,12 @@ class Fixture(db.Model):
         return 'X'
 
     def is_open_for_prediction(self) -> bool:
-        """True if predictions are still allowed (before kickoff)."""
-        now = datetime.now(ZoneInfo('America/New_York'))
+        now_utc = datetime.now(timezone.utc)
         md = self.match_date
         if md.tzinfo is None:
-            md = md.replace(tzinfo=ZoneInfo('America/New_York'))  # coerce naive
-        return now < md
+            md = md.replace(tzinfo=timezone.utc)
+        return now_utc < md
+
 
 
 class Prediction(db.Model):
@@ -193,15 +193,6 @@ def load_user(user_id: str):
 # Utility functions
 #
 def fetch_fixtures_from_api() -> list[dict]:
-    """
-    Attempt to fetch Serie A fixtures from the football-data.org API. Returns a
-    list of fixture dicts with keys matching Fixture fields (match_id, date,
-    home_team, away_team, season, matchday, status, home_score, away_score).
-
-    The free football-data.org plan requires an API key to be sent in the
-    `X-Auth-Token` header【267555250325710†L134-L145】. If the API key is not set, this function
-    returns an empty list.
-    """
     api_key = os.environ.get('FOOTBALL_DATA_API_KEY')
     if not api_key:
         return []
@@ -223,12 +214,11 @@ def fetch_fixtures_from_api() -> list[dict]:
         status = match.get('status')
         if status not in ('SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED', 'FINISHED'):
             continue
-        utc_date_str = match['utcDate']
-        utc_dt = datetime.fromisoformat(utc_date_str.replace('Z', '+00:00'))
-        local_dt = utc_dt.astimezone(ZoneInfo('America/New_York'))
+        utc_date_str = match['utcDate']  # ISO string in UTC
+        utc_dt = datetime.fromisoformat(utc_date_str.replace('Z', '+00:00'))  # aware UTC
         fixtures.append({
             'match_id': str(match['id']),
-            'match_date': local_dt,
+            'match_date': utc_dt,  # <-- keep UTC
             'home_team': match['homeTeam']['name'],
             'away_team': match['awayTeam']['name'],
             'season': season_str,
@@ -239,15 +229,7 @@ def fetch_fixtures_from_api() -> list[dict]:
         })
     return fixtures
 
-
 def fetch_fixtures_from_fallback() -> list[dict]:
-    """
-    Load fixtures from a bundled JSON file under data/. This fallback includes
-    the full 2024/25 Serie A season from the openfootball project. Each match
-    dictionary contains fields similar to the API. Only matches with no final
-    score yet (future fixtures) are returned. Times are assumed to be local
-    18:00 Eastern if unspecified.
-    """
     fallback_path = Path(__file__).resolve().parent / 'data' / 'seriea_2024_25.json'
     if not fallback_path.exists():
         return []
@@ -260,11 +242,12 @@ def fetch_fixtures_from_fallback() -> list[dict]:
         if not ft:
             date_str = match['date']
             time_str = match.get('time', '18:00')
-            dt = datetime.fromisoformat(f"{date_str}T{time_str}")
-            dt_local = dt.replace(tzinfo=ZoneInfo('Europe/Rome')).astimezone(ZoneInfo('America/New_York'))
+            # Europe/Rome -> UTC
+            it_dt = datetime.fromisoformat(f"{date_str}T{time_str}").replace(tzinfo=ZoneInfo('Europe/Rome'))
+            utc_dt = it_dt.astimezone(timezone.utc)
             fixtures.append({
                 'match_id': f"{date_str}-{match['team1']}-{match['team2']}",
-                'match_date': dt_local,
+                'match_date': utc_dt,  # <-- UTC
                 'home_team': match['team1'],
                 'away_team': match['team2'],
                 'season': season_data.get('name', '2024/25'),
@@ -368,30 +351,20 @@ def update_fixtures_adaptive(force: bool = False) -> None:
     FETCH_STATE["last_interval"] = min_interval
 
 def upcoming_fixtures() -> list[Fixture]:
-    """
-    Show fixtures starting within the next 7 days,
-    PLUS all fixtures from the season's first matchweek (Matchday 1)
-    even if they're further out. Predictions still lock at kickoff.
-    """
-    tz = ZoneInfo('America/New_York')
-    now = datetime.now(tz)
-    next_week = now + timedelta(days=7)
+    now_utc = datetime.now(timezone.utc)
+    next_week_utc = now_utc + timedelta(days=7)
 
-    # Base: next 7 days
-    base_q = (
+    base = (
         Fixture.query.filter(
-            Fixture.match_date >= now,
-            Fixture.match_date <= next_week
-        )
+            Fixture.match_date >= now_utc,
+            Fixture.match_date <= next_week_utc
+        ).all()
     )
 
-    base = base_q.all()
-
-    # Find the very first upcoming scheduled fixture to detect Week 1
     first_upcoming = (
         Fixture.query.filter(
             Fixture.status.in_(('SCHEDULED', 'TIMED')),
-            Fixture.match_date >= now
+            Fixture.match_date >= now_utc
         )
         .order_by(Fixture.match_date.asc())
         .first()
@@ -399,21 +372,18 @@ def upcoming_fixtures() -> list[Fixture]:
 
     week1 = []
     if first_upcoming and first_upcoming.matchday:
-        # Include ALL fixtures that share that first match's matchday (Week 1),
-        # regardless of whether they’re more than 7 days away.
         week1 = (
             Fixture.query.filter(
                 Fixture.status.in_(('SCHEDULED', 'TIMED')),
                 Fixture.matchday == first_upcoming.matchday
-            )
-            .all()
+            ).all()
         )
 
-    # Merge + de-dup + sort
     merged = {f.id: f for f in base}
     for f in week1:
         merged[f.id] = f
     return sorted(merged.values(), key=lambda f: f.match_date)
+
 
 
 
