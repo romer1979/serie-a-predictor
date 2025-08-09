@@ -569,3 +569,36 @@ def admin_users():
     users = User.query.order_by(func.lower(User.username)).all()
     return render_template('admin_users.html', users=users)
 
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+
+        if not username or not password:
+            flash('Username and password are required.', 'danger')
+            return render_template('register.html')
+
+        # case-insensitive uniqueness
+        exists = User.query.filter(func.lower(User.username) == username.lower()).first()
+        if exists:
+            flash('Username already exists.', 'danger')
+            return render_template('register.html')
+
+        try:
+            u = User(username=username, is_admin=False)
+            u.set_password(password)
+            db.session.add(u)
+            db.session.commit()
+            flash('Registration successful. Please log in.', 'success')
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            print('[REGISTER_ERROR]', repr(e))
+            flash('Registration failed due to a server error. Please try again.', 'danger')
+
+    return render_template('register.html')
+
