@@ -33,7 +33,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from secrets import token_urlsafe
-from sqlalchemy import func
+from sqlalchemy import func, distinct
 
 
 import requests
@@ -469,7 +469,60 @@ def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[st
     for fixture_id, username, selection in rows:
         out.setdefault(fixture_id, []).append((username, selection))
     return out
+def current_season_from_db() -> str | None:
+    row = db.session.query(Fixture.season).order_by(Fixture.season.desc()).first()
+    return row[0] if row else None
 
+def all_matchdays_for_season(season: str) -> list[str]:
+    rows = (
+        db.session.query(distinct(Fixture.matchday))
+        .filter(Fixture.season == season)
+        .all()
+    )
+    mds = [r[0] for r in rows if r[0] is not None]
+    # Try numeric sort when possible, fallback to lexical
+    try:
+        return [str(n) for n in sorted({int(x) for x in mds})]
+    except Exception:
+        return sorted(set(mds), key=lambda s: (len(s), s))
+
+def classify_matchdays(season: str):
+    """Return (finished, live, upcoming, rest) lists of matchday strings."""
+    now_utc = datetime.now(timezone.utc)
+
+    md_status = {}
+    # For each matchday, check fixtures’ statuses to decide bucket
+    for md in all_matchdays_for_season(season):
+        q = Fixture.query.filter_by(season=season, matchday=md)
+        statuses = {f.status for f in q.all()}
+        if any(s in ('IN_PLAY', 'PAUSED') for s in statuses):
+            md_status[md] = 'live'
+        elif statuses and statuses.issubset({'FINISHED'}):
+            md_status[md] = 'finished'
+        elif any(s in ('SCHEDULED', 'TIMED') for s in statuses):
+            # If there is at least one fixture in future -> upcoming
+            future = Fixture.query.filter(
+                Fixture.season == season,
+                Fixture.matchday == md,
+                Fixture.match_date >= now_utc
+            ).count()
+            md_status[md] = 'upcoming' if future else 'finished'
+        else:
+            md_status[md] = 'rest'
+
+    finished = [md for md, st in md_status.items() if st == 'finished']
+    live = [md for md, st in md_status.items() if st == 'live']
+    upcoming = [md for md, st in md_status.items() if st == 'upcoming']
+    rest = [md for md, st in md_status.items() if st == 'rest']
+
+    # Order nicely
+    def _order(lst):
+        try:
+            return [str(n) for n in sorted({int(x) for x in lst})]
+        except Exception:
+            return sorted(set(lst), key=lambda s: (len(s), s))
+
+    return _order(finished), _order(live), _order(upcoming), _order(rest)
 # -----------------------------------------------------------------------------
 # Routes
 #
@@ -695,6 +748,37 @@ def history():
         all_preds=all_preds,
         weekly_rows=weekly_rows,
     )
+@app.route('/season/<season>/matchdays')
+@login_required
+def matchdays(season):
+    # Make sure we have fixtures for that season
+    have_any = Fixture.query.filter_by(season=season).first()
+    if not have_any:
+        flash(f"No fixtures found for season {season}.", "warning")
+        return redirect(url_for('index'))
+
+    finished, live, upcoming, rest = classify_matchdays(season)
+
+    # Only highlight the next couple of upcoming matchdays
+    next_two = upcoming[:2]
+
+    return render_template(
+        'matchdays.html',
+        season=season,
+        finished=finished,
+        live=live,
+        next_two=next_two,
+        remaining_upcoming=upcoming[2:],
+        rest=rest,
+    )
+@app.route('/matchdays')
+@login_required
+def matchdays_current():
+    season = current_season_from_db()
+    if not season:
+        flash("No season data available yet.", "warning")
+        return redirect(url_for('index'))
+    return redirect(url_for('matchdays', season=season))
 
 # --- Admin: list users, delete user, reset password ---
 
