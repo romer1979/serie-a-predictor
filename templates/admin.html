@@ -1,52 +1,12 @@
 {% extends 'layout.html' %}
 {% block content %}
-  <h1 class="h3 mb-3">Admin — Invite Codes</h1>
-
-  <div class="row g-3">
-    <div class="col-lg-5">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h2 class="h5 mb-3">Create Invite</h2>
-          <form method="post">
-            <div class="input-group">
-              <input class="form-control" name="code" placeholder="e.g. WEEK1-INVITE-2025" required>
-              <button class="btn btn-primary" type="submit">Add</button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-
-    <div class="col-lg-7">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h2 class="h5 mb-3">Existing Invites</h2>
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <thead class="table-light-subtle">
-                <tr>
-                  <th>Code</th>
-                  <th>Used By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for inv in invites %}
-                  <tr>
-                    <td class="fw-semibold">{{ inv.code }}</td>
-                    <td>
-                      {% if inv.used_by_user_id %}
-                        <span class="badge text-bg-success">Used</span>
-                      {% else %}
-                        <span class="badge text-bg-secondary">Unused</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </div>
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h1 class="h4 mb-3">Admin</h1>
+    <p class="text-secondary mb-4">Invites are disabled; signup is open to everyone.</p>
+    <form method="post" action="{{ url_for('admin_refresh') }}">
+      <button class="btn btn-outline-primary">Refresh Fixtures Now</button>
+    </form>
   </div>
+</div>
 {% endblock %}
