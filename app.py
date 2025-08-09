@@ -554,11 +554,24 @@ def leaderboard():
     return render_template("leaderboard.html", users=users_sorted)
 
 
-@app.route("/login", methods=["GET", "POST"])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
+    next_url = request.args.get('next')
     if current_user.is_authenticated:
-        return redirect(url_for("index"))
-    if request.method == "POST":
-        username = (request.form.get("username") or "").strip()
-        password = request.form.get("password") or ""
+        return redirect(next_url or url_for('index'))
+
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+        # case-insensitive lookup is friendlier
+        user = User.query.filter(func.lower(User.username) == username.lower()).first()
+
+        if user and user.check_password(password):
+            login_user(user)
+            return redirect(next_url or url_for('index'))
+
+        flash('Invalid username or password', 'danger')
+        return render_template('login.html')   # <— IMPORTANT: return on POST failure
+
+    return render_template('login.html')       # <— IMPORTANT: return on GET
        
