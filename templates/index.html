@@ -2,7 +2,7 @@
 {% block content %}
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h1 class="h3 mb-0">Upcoming Fixtures</h1>
-    <span class="text-secondary small">Times in Eastern</span>
+    <span id="tz-label" class="text-secondary small">Times in your local timezone</span>
   </div>
 
   {% if not fixtures %}
@@ -27,7 +27,12 @@
                 {% for f in fixtures %}
                   {% set myp = user_predictions.get(f.id) %}
                   <tr>
-                    <td class="text-nowrap">{{ f.match_date.strftime('%a %b %d, %H:%M') }}</td>
+                    <td class="text-nowrap">
+                      <time class="kickoff"
+                            datetime="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=namespace.utc)).isoformat() }}">
+                        {{ (f.match_date.astimezone(namespace.utc) if f.match_date.tzinfo else f.match_date.replace(tzinfo=namespace.utc)).strftime('%Y-%m-%d %H:%M UTC') }}
+                      </time>
+                    </td>
                     <td>
                       <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
                       <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
