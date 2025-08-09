@@ -1,29 +1,62 @@
 {% extends 'layout.html' %}
 {% block content %}
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h3 mb-0">Leaderboard</h1>
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <h1 class="h4 mb-0">Leaderboard</h1>
+</div>
+
+<form class="row g-2 align-items-end mb-3" method="get" action="{{ url_for('leaderboard') }}">
+  <div class="col-auto">
+    <label class="form-label small text-secondary">Scope</label>
+    <select name="scope" class="form-select form-select-sm" onchange="this.form.submit()">
+      <option value="overall" {% if scope=='overall' %}selected{% endif %}>Overall</option>
+      <option value="week" {% if scope=='week' %}selected{% endif %}>Matchday</option>
+    </select>
   </div>
 
-  <div class="card shadow-sm">
-    <div class="card-body p-0">
-      <table class="table table-striped align-middle mb-0">
-        <thead class="table-light-subtle">
-          <tr>
-            <th style="width: 80px;">#</th>
-            <th>User</th>
-            <th style="width: 160px;">Points</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for u in users %}
-            <tr>
-              <td class="text-secondary">{{ loop.index }}</td>
-              <td class="fw-semibold">{{ u.username }}</td>
-              <td><span class="badge text-bg-primary">{{ u.points }}</span></td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  {% if scope == 'week' %}
+    <div class="col-auto">
+      <label class="form-label small text-secondary">Season</label>
+      <select name="season" class="form-select form-select-sm" onchange="this.form.submit()">
+        {% for s in seasons %}
+          <option value="{{ s }}" {% if s==season %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
     </div>
+    <div class="col-auto">
+      <label class="form-label small text-secondary">Matchday</label>
+      <select name="matchday" class="form-select form-select-sm" onchange="this.form.submit()">
+        {% for d in matchdays %}
+          <option value="{{ d }}" {% if d==matchday %}selected{% endif %}>{{ d }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  {% endif %}
+
+  <div class="col-auto">
+    <button class="btn btn-sm btn-primary">Go</button>
   </div>
+</form>
+
+<div class="card shadow-sm">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead class="table-light-subtle">
+        <tr>
+          <th>Rank</th>
+          <th>User</th>
+          <th>Points{% if scope=='week' %} (MD {{ matchday }}){% endif %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ u.username if u.username is defined else u['username'] }}</td>
+            <td class="fw-semibold">{{ u.points if u.points is defined else u['points'] }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}
