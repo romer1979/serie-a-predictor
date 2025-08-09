@@ -102,7 +102,7 @@
                     </td>
 
                     <td>
-                      {% set show_preds_now = (not f.is_open_for_prediction()) %}
+                      {% set show_preds_now = (not f.is_open_for_prediction()) or f.status in ['IN_PLAY','PAUSED','FINISHED'] or current_user.is_admin %}
                       {% if not show_preds_now %}
                         <span class="text-secondary">Hidden until kickoff</span>
                       {% else %}
