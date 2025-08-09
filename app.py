@@ -230,47 +230,35 @@ def fetch_fixtures_from_api() -> list[dict]:
 
 
 def fetch_fixtures_from_fallback() -> list[dict]:
-    """
-    Fallback JSON bundled with repo. Interpret Italy time -> convert to UTC.
-    """
-    fallback_path = Path(__file__).resolve().parent / "data" / "seriea_2024_25.json"
+    fallback_path = Path(__file__).resolve().parent / 'data' / 'seriea_2024_25.json'
     if not fallback_path.exists():
         return []
-
-    with open(fallback_path, "r", encoding="utf-8") as f:
+    with open(fallback_path, 'r', encoding='utf-8') as f:
         season_data = json.load(f)
 
     fixtures: list[dict] = []
-    for match in season_data.get("matches", []):
-        score = match.get("score", {})
-        ft = score.get("ft")
-        if ft:
-            # Finished in file -> you can also backfill, but we only load future here
-            continue
-
-        date_str = match["date"]
-        time_str = match.get("time", "18:00")
-        # local Italy time -> to UTC
-        dt_it = datetime.fromisoformat(f"{date_str}T{time_str}").replace(
-            tzinfo=ZoneInfo("Europe/Rome")
-        )
-        utc_dt = dt_it.astimezone(timezone.utc)
-
-        fixtures.append(
-            {
-                "match_id": f"{date_str}-{match['team1']}-{match['team2']}",
-                "match_date": utc_dt,  # UTC aware
-                "home_team": match["team1"],
-                "away_team": match["team2"],
-                "season": season_data.get("name", "2024/25"),
-                "matchday": match.get("round"),
-                "status": "SCHEDULED",
-                "home_score": None,
-                "away_score": None,
-            }
-        )
+    for match in season_data.get('matches', []):
+        score = match.get('score', {})
+        ft = score.get('ft')
+        if not ft:
+            date_str = match['date']
+            time_str = match.get('time', '18:00')
+            dt = datetime.fromisoformat(f"{date_str}T{time_str}")
+            # interpret as Italy time, then convert to UTC
+            dt_local = dt.replace(tzinfo=ZoneInfo('Europe/Rome'))
+            utc_dt = dt_local.astimezone(timezone.utc)
+            fixtures.append({
+                'match_id': f"{date_str}-{match['team1']}-{match['team2']}",
+                'match_date': utc_dt,
+                'home_team': match['team1'],
+                'away_team': match['team2'],
+                'season': season_data.get('name', '2024/25'),
+                'matchday': match.get('round'),
+                'status': 'SCHEDULED',
+                'home_score': None,
+                'away_score': None,
+            })
     return fixtures
-
 
 def update_fixtures() -> None:
     """
@@ -365,24 +353,23 @@ def update_fixtures_adaptive(force: bool = False) -> None:
 
 def upcoming_fixtures() -> list[Fixture]:
     """
-    Next 7 days (UTC window) + all fixtures in the first upcoming matchday.
+    Show fixtures starting within the next 7 days,
+    PLUS all fixtures from the season's first matchweek (Matchday 1)
+    even if they're further out. (Kickoff lock still applies.)
     """
     now_utc = datetime.now(timezone.utc)
     next_week_utc = now_utc + timedelta(days=7)
 
     base = (
-        Fixture.query.filter(
-            Fixture.match_date >= now_utc, Fixture.match_date <= next_week_utc
-        )
+        Fixture.query
+        .filter(Fixture.match_date >= now_utc, Fixture.match_date <= next_week_utc)
         .order_by(Fixture.match_date.asc())
         .all()
     )
 
-    # First upcoming scheduled fixture to detect Week 1
     first_upcoming = (
-        Fixture.query.filter(
-            Fixture.status.in_(("SCHEDULED", "TIMED")), Fixture.match_date >= now_utc
-        )
+        Fixture.query
+        .filter(Fixture.status.in_(('SCHEDULED', 'TIMED')), Fixture.match_date >= now_utc)
         .order_by(Fixture.match_date.asc())
         .first()
     )
@@ -390,11 +377,11 @@ def upcoming_fixtures() -> list[Fixture]:
     week1 = []
     if first_upcoming and first_upcoming.matchday:
         week1 = (
-            Fixture.query.filter(
-                Fixture.status.in_(("SCHEDULED", "TIMED")),
-                Fixture.matchday == first_upcoming.matchday,
+            Fixture.query
+            .filter(
+                Fixture.status.in_(('SCHEDULED', 'TIMED')),
+                Fixture.matchday == first_upcoming.matchday
             )
-            .order_by(Fixture.match_date.asc())
             .all()
         )
 
@@ -402,7 +389,6 @@ def upcoming_fixtures() -> list[Fixture]:
     for f in week1:
         merged[f.id] = f
     return sorted(merged.values(), key=lambda f: f.match_date)
-
 
 def predictions_for_fixtures_detailed(fixtures):
     """
@@ -574,4 +560,12 @@ def login():
         return render_template('login.html')   # <— IMPORTANT: return on POST failure
 
     return render_template('login.html')       # <— IMPORTANT: return on GET
-       
+
+@app.route('/admin/users', methods=['GET'])
+@login_required
+def admin_users():
+    if not current_user.is_admin:
+        abort(403)
+    users = User.query.order_by(func.lower(User.username)).all()
+    return render_template('admin_users.html', users=users)
+
