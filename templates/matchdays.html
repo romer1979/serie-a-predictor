@@ -78,32 +78,36 @@
                     </td>
 
                     <td>
-                      {% if f.is_open_for_prediction() %}
-                        <div class="d-inline-flex flex-wrap gap-3 mb-0">
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio"
-                                   name="fixture_{{ f.id }}" id="p1-{{ f.id }}" value="1"
-                                   {% if myp and myp.selection == '1' %}checked{% endif %}>
-                            <label class="form-check-label" for="p1-{{ f.id }}">1</label>
-                          </div>
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio"
-                                   name="fixture_{{ f.id }}" id="px-{{ f.id }}" value="X"
-                                   {% if myp and myp.selection == 'X' %}checked{% endif %}>
-                            <label class="form-check-label" for="px-{{ f.id }}">X</label>
-                          </div>
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio"
-                                   name="fixture_{{ f.id }}" id="p2-{{ f.id }}" value="2"
-                                   {% if myp and myp.selection == '2' %}checked{% endif %}>
-                            <label class="form-check-label" for="p2-{{ f.id }}">2</label>
-                          </div>
-                        </div>
+                      {# show only after kickoff #}
+                      {% set show_preds_now = (not f.is_open_for_prediction()) %}
+                      {% if not show_preds_now %}
+                        <span class="text-secondary">Hidden until kickoff</span>
                       {% else %}
-                        {% if myp %}
-                          <span class="badge text-bg-secondary">Locked: {{ myp.selection }}</span>
+                        {% set plist = all_preds.get(f.id, []) %}
+                        {% if not plist %}
+                          <span class="text-secondary">No predictions</span>
                         {% else %}
-                          <span class="badge text-bg-secondary">Locked</span>
+                          {# Determine current outcome from live/finished score #}
+                          {% set current_outcome = None %}
+                          {% if f.home_score is not none and f.away_score is not none %}
+                            {% if f.home_score > f.away_score %}
+                              {% set current_outcome = '1' %}
+                            {% elif f.home_score < f.away_score %}
+                              {% set current_outcome = '2' %}
+                            {% else %}
+                              {% set current_outcome = 'X' %}
+                            {% endif %}
+                          {% endif %}
+                    
+                          <div class="small">
+                            {% for uname, sel in plist %}
+                              {# Make correct picks green & bold when we can evaluate #}
+                              <span class="badge rounded-pill me-1 mb-1
+                                           {% if current_outcome and sel == current_outcome %}text-bg-success{% else %}text-bg-dark{% endif %}">
+                                {{ uname }}: {{ sel }}
+                              </span>
+                            {% endfor %}
+                          </div>
                         {% endif %}
                       {% endif %}
                     </td>
