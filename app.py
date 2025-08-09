@@ -105,14 +105,9 @@ def utc_iso(dt):
     if dt is None:
         return ''
     if dt.tzinfo is None:
-        # Treat naive datetimes as Italy time
         dt = dt.replace(tzinfo=timezone.utc)
-    dt_utc = dt.astimezone(timezone.utc)
-    s = dt_utc.isoformat()
-    if s.endswith('+00:00'):
-        return s[:-6] + 'Z'
-    else:
-        return s
+    s = dt.astimezone(timezone.utc).isoformat()
+    return s[:-6] + 'Z' if s.endswith('+00:00') else s
     
 # -----------------------------------------------------------------------------
 # Models
@@ -256,8 +251,9 @@ def fetch_fixtures_from_fallback() -> list[dict]:
             date_str = match['date']
             time_str = match.get('time', '18:00')
             # Europe/Rome -> UTC
-            it_dt = datetime.fromisoformat(f"{date_str}T{time_str}").replace(tzinfo=ZoneInfo('Europe/Rome'))
-            utc_dt = it_dt.astimezone(timezone.utc)
+            dt_naive = datetime.fromisoformat(f"{date_str}T{time_str}")
+            dt_rome = dt_naive.replace(tzinfo=ZoneInfo('Europe/Rome'))
+            utc_dt = dt_rome.astimezone(timezone.utc)
             fixtures.append({
                 'match_id': f"{date_str}-{match['team1']}-{match['team2']}",
                 'match_date': utc_dt,  # <-- UTC
@@ -313,8 +309,7 @@ FETCH_STATE = {"last_run": None, "last_interval": None}
 
 def _adaptive_min_interval() -> timedelta:
     """Return how often we should hit the API right now."""
-    tz = ZoneInfo('America/New_York')
-    now = datetime.now(tz)
+    now_utc = datetime.now(timezone.utc)
 
     # If anything is live, poll every 60s
     live = Fixture.query.filter(Fixture.status.in_(('IN_PLAY', 'PAUSED'))).count()
@@ -324,43 +319,38 @@ def _adaptive_min_interval() -> timedelta:
     # If matches kick off within the next 2 hours, poll every 60s
     soon = (
         Fixture.query
-        .filter(Fixture.match_date >= now, Fixture.match_date <= now + timedelta(hours=2))
+        .filter(Fixture.match_date >= now_utc, Fixture.match_date <= now_utc + timedelta(hours=2))
         .count()
     )
     if soon > 0:
         return timedelta(seconds=60)
 
-    # If matches are today (but not within 2h), poll every 6 hours
-    today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+    # If matches are today (UTC day), poll every 6 hours
+    today_end_utc = now_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
     today = (
         Fixture.query
-        .filter(Fixture.match_date >= now, Fixture.match_date <= today_end)
+        .filter(Fixture.match_date >= now_utc, Fixture.match_date <= today_end_utc)
         .count()
     )
     if today > 0:
         return timedelta(hours=6)
 
-    # Otherwise (quiet times / off days), poll every 6 hours
+    # Otherwise quiet times
     return timedelta(hours=24)
-
 
 def update_fixtures_adaptive(force: bool = False) -> None:
     """Call update_fixtures() only if the adaptive interval has elapsed."""
-    tz = ZoneInfo('America/New_York')
-    now = datetime.now(tz)
+    now_utc = datetime.now(timezone.utc)
 
     min_interval = _adaptive_min_interval()
     last_run = FETCH_STATE["last_run"]
 
-    # If not forced and we haven't exceeded the interval, skip
-    if not force and last_run is not None and (now - last_run) < min_interval:
+    if not force and last_run is not None and (now_utc - last_run) < min_interval:
         return
 
-    # Do the real work
     update_fixtures()
 
-    # Record state
-    FETCH_STATE["last_run"] = now
+    FETCH_STATE["last_run"] = now_utc
     FETCH_STATE["last_interval"] = min_interval
 
 def upcoming_fixtures() -> list[Fixture]:
@@ -791,6 +781,31 @@ with app.app_context():
             db.session.commit()
             print(f"[BOOTSTRAP] Invite code ensured: {invite_code}")
 
+@app.cli.command('fix-times-utc')
+def fix_times_utc():
+    from sqlalchemy import select
+    changed = 0
+    for f in db.session.execute(select(Fixture)).scalars():
+        md = f.match_date
+        if md is None:
+            continue
+        if md.tzinfo is None:
+            # Assume legacy were Italy local; convert to UTC
+            md = md.replace(tzinfo=ZoneInfo('Europe/Rome')).astimezone(timezone.utc)
+            f.match_date = md
+            changed += 1
+        else:
+            # If stored as America/New_York, convert to UTC
+            try:
+                if getattr(md.tzinfo, "key", None) == "America/New_York":
+                    f.match_date = md.astimezone(timezone.utc)
+                    changed += 1
+            except Exception:
+                # If tzinfo doesn’t have .key, still normalize to UTC
+                f.match_date = md.astimezone(timezone.utc)
+                changed += 1
+    db.session.commit()
+    print(f"Normalized {changed} fixture times to UTC.")
     
 if __name__ == '__main__':
     with app.app_context():
