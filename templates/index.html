@@ -2,7 +2,7 @@
 {% block content %}
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h1 class="h3 mb-0">Upcoming Fixtures</h1>
-    <span class="text-secondary small">Times in your local time</span>
+    <span class="text-secondary small">Times shown in your local time</span>
   </div>
 
   {% if not fixtures %}
@@ -10,33 +10,32 @@
   {% else %}
     <div class="card shadow-sm">
       <div class="card-body p-0">
-        <!-- ONE form for all fixtures -->
         <form method="post" action="{{ url_for('save_all_predictions') }}" autocomplete="off" novalidate>
           <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
               <thead class="table-light-subtle">
                 <tr>
-                  <th style="width: 170px;">Date & Time</th>
-                  <th>Match</th>
-                  <th style="width: 260px;">Your Pick</th>
-                  <th style="width: 260px;">Result / Status</th>
-                  <th style="width: 320px;">Predictions</th>
+                  <th rowspan="2" style="width: 170px; vertical-align: middle;">Date & Time</th>
+                  <th rowspan="2" style="vertical-align: middle;">Match</th>
+                  <th rowspan="2" style="width: 260px; vertical-align: middle;">Your Pick</th>
+                  <th rowspan="2" style="width: 160px; vertical-align: middle;">Result / Status</th>
+                  {% set colcount = users_sorted|length %}
+                  <th colspan="{{ colcount }}" class="text-center">Predictions</th>
+                </tr>
+                <tr>
+                  {% for u in users_sorted %}
+                    <th class="text-center small fw-semibold text-secondary text-nowrap">{{ u.username }}</th>
+                  {% endfor %}
                 </tr>
               </thead>
               <tbody>
                 {% for f in fixtures %}
                   {% set myp = user_predictions.get(f.id) %}
+                  {% set show_preds_now = (not f.is_open_for_prediction()) or f.status in ['IN_PLAY','PAUSED','FINISHED'] %}
                   <tr>
-                    <!-- Local-time rendering: JS will convert from UTC -->
-                    <td class="text-nowrap">
-                      <span class="localtime"
-                            data-utc="{{ f.match_date.isoformat() }}">{{ f.match_date.strftime('%a %b %d, %H:%M') }}</span>
-                    </td>
-
+                    <td class="text-nowrap">{{ f.match_date.astimezone(namespace.utc).strftime('%a, %b %d at %I:%M %p') }}</td>
                     <td>
-                      <div class="fw-semibold">
-                        {{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}
-                      </div>
+                      <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
                       <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
                     </td>
 
@@ -80,56 +79,30 @@
                       {% else %}
                         <span class="badge text-bg-light text-secondary">{{ f.status }}</span>
                       {% endif %}
-
-                      {% if current_user.is_admin %}
-                        <!-- Admin-only simulate controls -->
-                        <div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
-                          <!-- Simulate LIVE -->
-                          <form method="post" action="{{ url_for('admin_simulate_live', fixture_id=f.id) }}" class="d-flex gap-2">
-                            <input type="number" name="home_score" class="form-control form-control-sm" style="width:70px" placeholder="H">
-                            <input type="number" name="away_score" class="form-control form-control-sm" style="width:70px" placeholder="A">
-                            <button class="btn btn-sm btn-outline-warning" type="submit">Sim LIVE</button>
-                          </form>
-
-                          <!-- Finish -->
-                          <form method="post" action="{{ url_for('admin_finish_fixture', fixture_id=f.id) }}" class="d-flex gap-2">
-                            <input type="number" name="home_score" class="form-control form-control-sm" style="width:70px" placeholder="H" required>
-                            <input type="number" name="away_score" class="form-control form-control-sm" style="width:70px" placeholder="A" required>
-                            <button class="btn btn-sm btn-success" type="submit">Finish</button>
-                          </form>
-                        </div>
-                      {% endif %}
                     </td>
 
-                    <td>
-                      {% set show_preds_now = (not f.is_open_for_prediction()) or f.status in ['IN_PLAY','PAUSED','FINISHED'] or current_user.is_admin %}
-                      {% if not show_preds_now %}
-                        <span class="text-secondary">Hidden until kickoff</span>
-                      {% else %}
-                        {% set plist = all_preds.get(f.id, []) %}
-                        {% if not plist %}
-                          <span class="text-secondary">No predictions</span>
+                    {# One cell per user, showing their pick for this fixture #}
+                    {% for u in users_sorted %}
+                      {% set sel = pred_matrix.get(f.id, {}).get(u.id) %}
+                      <td class="text-center">
+                        {% if show_preds_now %}
+                          {% if sel %}
+                            <span class="badge rounded-pill text-bg-dark">{{ sel }}</span>
+                          {% else %}
+                            <span class="text-secondary">—</span>
+                          {% endif %}
                         {% else %}
-                          <div class="small">
-                            {% for uname, sel in plist %}
-                              <span class="badge rounded-pill text-bg-dark me-1 mb-1">{{ uname }}: {{ sel }}</span>
-                            {% endfor %}
-                          </div>
+                          <span class="text-secondary">—</span>
                         {% endif %}
-                      {% endif %}
-                    </td>
+                      </td>
+                    {% endfor %}
                   </tr>
                 {% endfor %}
               </tbody>
               <tfoot>
                 <tr>
-                  <td colspan="5" class="text-end p-3">
+                  <td colspan="{{ 4 + (users_sorted|length) }}" class="text-end p-3">
                     <button type="submit" class="btn btn-primary">Save All Predictions</button>
-                    {% if current_user.is_admin %}
-                      <form method="post" action="{{ url_for('admin_refresh') }}" class="d-inline ms-2">
-                        <button type="submit" class="btn btn-outline-secondary">Refresh Fixtures</button>
-                      </form>
-                    {% endif %}
                   </td>
                 </tr>
               </tfoot>
@@ -139,23 +112,4 @@
       </div>
     </div>
   {% endif %}
-
-  <!-- Local-time conversion script (runs on this page) -->
-  <script>
-    (function () {
-      const els = document.querySelectorAll('.localtime[data-utc]');
-      els.forEach(el => {
-        try {
-          const s = el.getAttribute('data-utc');
-          // Normalize Z -> +00:00 for Safari compatibility if needed
-          const iso = s.endsWith('Z') ? s.replace('Z', '+00:00') : s;
-          const d = new Date(iso);
-          if (!isNaN(d.valueOf())) {
-            const opts = { weekday: 'short', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' };
-            el.textContent = d.toLocaleString(undefined, opts);
-          }
-        } catch (_) {}
-      });
-    })();
-  </script>
 {% endblock %}
