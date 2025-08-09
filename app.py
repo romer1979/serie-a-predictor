@@ -100,6 +100,7 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+app.jinja_env.globals['namespace'] = type('ns', (), {'utc': timezone.utc})
 
 # -----------------------------------------------------------------------------
 # Models
