@@ -515,6 +515,49 @@ def classify_matchdays(season: str):
     upcoming = _order([m for m,s in md_status.items() if s=='upcoming'])
     other = _order([m for m,s in md_status.items() if s=='other'])
     return finished, live, upcoming, other
+def prediction_matrix(fixtures):
+    """
+    Return (users, matrix, show_flags)
+      users: list of (user_id, username) who have at least one prediction among these fixtures (sorted by username)
+      matrix: dict[(fixture_id, user_id)] -> '1' | 'X' | '2' (or None if no pick)
+      show_flags: dict[fixture_id] -> bool  (True if predictions can be shown now)
+    """
+    from datetime import timezone
+    if not fixtures:
+        return [], {}, {}
+
+    fix_ids = [f.id for f in fixtures]
+
+    # Pull predictions joined with users for just these fixtures
+    rows = (
+        db.session.query(User.id, User.username, Prediction.fixture_id, Prediction.selection)
+        .join(Prediction, Prediction.user_id == User.id)
+        .filter(Prediction.fixture_id.in_(fix_ids))
+        .all()
+    )
+
+    # Who appears at least once?
+    user_set = {}
+    for uid, uname, _, _ in rows:
+        user_set[uid] = uname
+    # Order users by username
+    users = sorted(user_set.items(), key=lambda t: t[1].lower())
+
+    # Build the (fixture_id, user_id) -> selection matrix
+    matrix = {}
+    for uid, uname, fid, sel in rows:
+        matrix[(fid, uid)] = sel
+
+    # Compute reveal flags per fixture: show on/after kickoff or if live/paused/finished
+    utc_now = datetime.now(timezone.utc)
+    show_flags = {}
+    for f in fixtures:
+        kickoff = f.match_date
+        if kickoff.tzinfo is None:
+            kickoff = kickoff.replace(tzinfo=timezone.utc)
+        show_flags[f.id] = (f.status in ('IN_PLAY', 'PAUSED', 'FINISHED')) or (utc_now >= kickoff)
+
+    return users, matrix, show_flags
 
 # -----------------------------------------------------------------------------
 # Routes
@@ -526,14 +569,18 @@ def index():
     update_fixtures_adaptive()
     fixtures = upcoming_fixtures()
     user_predictions = {p.fixture_id: p for p in current_user.predictions}
-    # NEW: add all users' predictions for visible-after-kickoff column
-    all_preds = predictions_for_fixtures(fixtures)
+
+    users_cols, pred_matrix, show_flags = prediction_matrix(fixtures)
+
     return render_template(
         'index.html',
         fixtures=fixtures,
         user_predictions=user_predictions,
-        all_preds=all_preds,  # <-- pass to template
+        users_cols=users_cols,        # list[(user_id, username)]
+        pred_matrix=pred_matrix,      # dict[(fixture_id, user_id)] -> '1'|'X'|'2'
+        show_preds_flags=show_flags,  # dict[fixture_id] -> bool
     )
+
 
 @app.route('/predict/<int:fixture_id>', methods=['POST'])
 @login_required
