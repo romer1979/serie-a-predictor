@@ -113,12 +113,11 @@ def utc_iso(dt):
         return ''
     if dt.tzinfo is None:
         # Legacy: stored as local Eastern wall time
-        dt = dt.replace(tzinfo=ZoneInfo('America/New_York'))
+        dt = dt.replace(tzinfo=ZoneInfo('Europe/Rome'))
     dt_utc = dt.astimezone(timezone.utc)
     s = dt_utc.isoformat()
     if s.endswith('+00:00'):
-        s = s[:-6] + 'Z'
-    return s
+    return s[:-6] + 'Z' if s.endswith('+00:00') else s
     
 # -----------------------------------------------------------------------------
 # Models
