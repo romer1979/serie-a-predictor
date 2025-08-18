@@ -5,7 +5,7 @@
 </div>
 
 <form class="row g-2 align-items-end mb-3" method="get" action="{{ url_for('history') }}">
-  <div class="col-auto">
+  <div class="col-12 col-md-auto">
     <label class="form-label small text-secondary">Season</label>
     <select name="season" class="form-select form-select-sm" onchange="this.form.submit()">
       {% for s in seasons %}
@@ -13,7 +13,7 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-auto">
+  <div class="col-12 col-md-auto">
     <label class="form-label small text-secondary">Matchday</label>
     <select name="matchday" class="form-select form-select-sm" onchange="this.form.submit()">
       {% for d in matchdays %}
@@ -21,8 +21,8 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-auto">
-    <button class="btn btn-sm btn-primary">Go</button>
+  <div class="col-12 col-md-auto">
+    <button class="btn btn-sm btn-primary w-100">Go</button>
   </div>
 </form>
 
@@ -30,9 +30,12 @@
   <div class="alert alert-secondary">No fixtures for that selection.</div>
 {% else %}
 
+  <!-- Weekly Leaderboard -->
   <div class="card shadow-sm mb-4">
     <div class="card-header">Weekly Leaderboard — Season {{ season }}, Matchday {{ matchday }}</div>
-    <div class="card-body p-0">
+
+    <!-- Desktop / Tablet: table -->
+    <div class="card-body p-0 d-none d-md-block">
       <table class="table table-hover mb-0">
         <thead class="table-light-subtle">
           <tr><th>Rank</th><th>User</th><th>Points</th></tr>
@@ -48,18 +51,40 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Mobile: cards -->
+    <div class="card-body d-md-none">
+      {% if weekly_rows %}
+        <div class="list-group">
+          {% for row in weekly_rows %}
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-semibold">{{ loop.index }}. {{ row[1] }}</div>
+                <div class="text-secondary small">Matchday {{ matchday }}</div>
+              </div>
+              <div class="fw-bold">{{ row[2]|int }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-secondary small">No leaderboard entries.</div>
+      {% endif %}
+    </div>
   </div>
 
+  <!-- Fixtures -->
   <div class="card shadow-sm">
     <div class="card-header">Fixtures — Season {{ season }}, Matchday {{ matchday }}</div>
-    <div class="card-body p-0">
+
+    <!-- Desktop / Tablet: table -->
+    <div class="card-body p-0 d-none d-md-block">
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light-subtle">
             <tr>
-              <th style="width: 200px;">Date & Time</th>
+              <th style="width: 220px;">Date &amp; Time</th>
               <th>Match</th>
-              <th style="width: 150px;">Status / Result</th>
+              <th style="width: 180px;">Status / Result</th>
               <th>Predictions (all users)</th>
             </tr>
           </thead>
@@ -102,6 +127,54 @@
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- Mobile: cards -->
+    <div class="card-body d-md-none">
+      {% for f in fixtures %}
+        <div class="border rounded-3 p-3 mb-3">
+          <div class="d-flex justify-content-between align-items-start">
+            <div class="me-3">
+              <div class="text-secondary small">Date &amp; Time</div>
+              <div class="fw-semibold">
+                <time class="local-time" datetime="{{ f.match_date|utc_iso }}">{{ f.match_date|utc_iso }}</time>
+              </div>
+            </div>
+            <div class="text-end">
+              {% if f.status in ['IN_PLAY','PAUSED'] %}
+                <span class="badge text-bg-warning text-dark">LIVE</span>
+                {% if f.home_score is not none and f.away_score is not none %}
+                  <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
+                {% endif %}
+              {% elif f.status == 'FINISHED' %}
+                <span class="badge text-bg-success">FT</span>
+                <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
+              {% else %}
+                <span class="badge text-bg-light text-secondary">{{ f.status }}</span>
+              {% endif %}
+            </div>
+          </div>
+
+          <div class="mt-2">
+            <div class="text-secondary small">Match</div>
+            <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
+          </div>
+
+          <div class="mt-3">
+            <div class="text-secondary small">Predictions</div>
+            {% set plist = all_preds.get(f.id, []) %}
+            {% if not plist %}
+              <div class="small text-secondary">No predictions</div>
+            {% else %}
+              <div class="d-flex flex-wrap gap-2 mt-1">
+                {% for uname, sel in plist %}
+                  <span class="badge rounded-pill text-bg-dark">{{ uname }}: {{ sel }}</span>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
     </div>
   </div>
 
