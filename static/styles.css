@@ -8,4 +8,46 @@
     left: 20px;
     z-index: 1000; /* make sure it’s above other elements */
 }
+/* Mobile predictions list: horizontal scroll if many users */
+.predictions-strip {
+  display: flex;
+  gap: .5rem;
+  overflow-x: auto;
+  padding-bottom: .25rem;
+}
+
+/* Pills */
+.pick-pill {
+  white-space: nowrap;
+  border-radius: 9999px;
+  padding: .25rem .5rem;
+  font-size: .875rem;
+  background: var(--bs-gray-800);
+  color: var(--bs-body-color);
+  border: 1px solid var(--bs-gray-700);
+}
+
+/* Highlight correct picks (LIVE/FT) */
+.pick-correct {
+  background: rgba(25, 135, 84, .15);  /* Bootstrap success tint */
+  border-color: rgba(25, 135, 84, .35);
+}
+
+/* Optional: make long names truncate nicely */
+.pick-name {
+  max-width: 9rem;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+/* Keep the Save button easy to reach on phones */
+.sticky-save {
+  position: sticky;
+  bottom: 0;
+  background: var(--bs-body-bg);
+  padding-top: .5rem;
+}
+
 
