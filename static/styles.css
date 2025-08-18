@@ -2,3 +2,10 @@
 .card { border-radius: 14px; }
 .badge { letter-spacing: .2px; }
 .toast { border-radius: 12px; }
+.save-all-predictions-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 1000; /* make sure it’s above other elements */
+}
+
