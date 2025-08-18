@@ -1,34 +1,51 @@
 {% extends 'layout.html' %}
 {% block content %}
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h3 mb-0">Standings</h1>
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <div class="d-flex align-items-baseline gap-2">
+      <h1 class="h5 d-sm-none mb-0">Standings</h1>
+      <h1 class="h3 d-none d-sm-block mb-0">Standings</h1>
+    </div>
 
-    <form class="d-flex gap-2 align-items-center" method="get" action="{{ url_for('leaderboard') }}">
-      <select class="form-select form-select-sm" name="scope" onchange="this.form.submit()">
-        <option value="overall" {% if scope == 'overall' %}selected{% endif %}>Overall (all seasons)</option>
-        <option value="season"  {% if scope == 'season'  %}selected{% endif %}>Season</option>
-        <option value="week"    {% if scope == 'week'    %}selected{% endif %}>Matchday</option>
-      </select>
+    <!-- Filters -->
+    <form class="row gx-2 gy-2 align-items-end w-100 w-sm-auto" method="get" action="{{ url_for('leaderboard') }}">
+      <!-- Scope -->
+      <div class="col-12 col-sm-auto">
+        <label class="form-label small text-secondary mb-1 d-none d-sm-block">Scope</label>
+        <select class="form-select form-select-sm" name="scope" onchange="this.form.submit()">
+          <option value="overall" {% if scope == 'overall' %}selected{% endif %}>Overall (all seasons)</option>
+          <option value="season"  {% if scope == 'season'  %}selected{% endif %}>Season</option>
+          <option value="week"    {% if scope == 'week'    %}selected{% endif %}>Matchday</option>
+        </select>
+      </div>
 
-      {# season chooser for 'season' and 'week' scopes #}
       {% if scope in ['season', 'week'] %}
+      <!-- Season -->
+      <div class="col-12 col-sm-auto">
+        <label class="form-label small text-secondary mb-1 d-none d-sm-block">Season</label>
         <select class="form-select form-select-sm" name="season" onchange="this.form.submit()">
           {% for s in seasons %}
             <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
           {% endfor %}
         </select>
+      </div>
       {% endif %}
 
-      {# matchday chooser only for 'week' scope #}
       {% if scope == 'week' %}
+      <!-- Matchday -->
+      <div class="col-12 col-sm-auto">
+        <label class="form-label small text-secondary mb-1 d-none d-sm-block">Matchday</label>
         <select class="form-select form-select-sm" name="matchday" onchange="this.form.submit()">
           {% for md in matchdays %}
             <option value="{{ md }}" {% if md == matchday %}selected{% endif %}>MD {{ md }}</option>
           {% endfor %}
         </select>
+      </div>
       {% endif %}
 
-      <noscript><button class="btn btn-sm btn-primary" type="submit">Go</button></noscript>
+      <div class="col-12 col-sm-auto d-sm-none">
+        <button class="btn btn-primary btn-sm w-100" type="submit">Update</button>
+      </div>
+      <noscript><div class="col-12 col-sm-auto"><button class="btn btn-sm btn-primary" type="submit">Go</button></div></noscript>
     </form>
   </div>
 
@@ -47,10 +64,10 @@
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light-subtle">
-            <tr>
-              <th style="width: 80px;">Rank</th>
+            <tr class="text-nowrap">
+              <th class="d-none d-sm-table-cell" style="width: 80px;">Rank</th>
               <th>Username</th>
-              <th style="width: 140px;">Points</th>
+              <th class="text-end" style="width: 140px;">Points</th>
             </tr>
           </thead>
           <tbody>
@@ -59,9 +76,13 @@
               {% set uname = item.username if item.username is defined else item['username'] %}
               {% set pts   = item.points   if item.points   is defined else item['points'] %}
               <tr>
-                <td>{{ loop.index }}</td>
-                <td class="fw-semibold">{{ uname }}</td>
-                <td class="fw-bold">{{ pts }}</td>
+                <td class="d-none d-sm-table-cell">{{ loop.index }}</td>
+                <td class="fw-semibold text-truncate" style="max-width: 280px;">
+                  <!-- On mobile, show rank as a subtle prefix badge -->
+                  <span class="badge bg-secondary-subtle text-secondary-emphasis d-inline d-sm-none me-2">{{ loop.index }}</span>
+                  {{ uname }}
+                </td>
+                <td class="fw-bold text-end">{{ pts }}</td>
               </tr>
             {% endfor %}
           </tbody>
