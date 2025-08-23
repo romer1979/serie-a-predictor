@@ -2,10 +2,11 @@
 {% block title %}Fixtures · Serie A Predictor{% endblock %}
 
 {% block content %}
-  <div class="section-title" style="display:flex;align-items:center;gap:12px;justify-content:space-between;">
-    <h1 style="margin:0;font-size:20px">Upcoming & Live Fixtures</h1>
-    <form method="post" action="{{ url_for('save_all_predictions') }}">
-      <button class="btn btn-primary" type="submit">Save all my picks</button>
+  <div style="margin-top: 20px; text-align: center;">
+    <form action="{{ url_for('save_all_predictions') }}" method="post">
+      <button class="btn btn-primary" type="submit" style="padding:10px 25px; font-size:1.1em;">
+        💾 Save All Predictions
+      </button>
     </form>
   </div>
 
@@ -63,26 +64,22 @@
                 </span>
               </td>
 
-              <!-- Your pick (editable until lock) -->
+             <!-- Your pick (only radio buttons, no inline update button) -->
               <td class="td">
-                <form class="choice" action="{{ url_for('predict', fixture_id=f.id) }}" method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                  {% for opt,label in [('1','Home'),('X','Draw'),('2','Away')] %}
-                    <label class="radio">
-                      <input type="radio" name="selection" value="{{ opt }}"
+                <div class="choice" style="display:flex; gap:12px; justify-content:center;">
+                  {% for opt,label in [('1','1'),('X','X'),('2','2')] %}
+                    <label class="radio" style="text-align:center;">
+                      <input type="radio" name="fixture_{{ f.id }}" value="{{ opt }}"
                              {% if my and my.selection == opt %}checked{% endif %}
                              {% if locked %}disabled{% endif %}>
-                      <span class="tiny">{{ opt }}</span>   <!-- changed from label -->
+                      <span class="tiny">{{ label }}</span>
                     </label>
                   {% endfor %}
-                  <button class="btn tiny" type="submit" {% if locked %}disabled{% endif %}>
-                    {% if my %}Update{% else %}Pick{% endif %}
-                  </button>
                   {% if locked and f.status != 'FINISHED' %}
                     <span class="tiny muted">Locked</span>
                   {% endif %}
-                </form>
+                </div>
               </td>
-
 
               <!-- One column per user: prediction shown only when allowed -->
               {% for uid, uname in users_cols %}
