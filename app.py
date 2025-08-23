@@ -1,5 +1,5 @@
 """
-Serie A Predictor web application.
+Serie A Predictor web application..
 
 This Flask application allows invited users to register, log in and submit simple
 predictions (1/X/2) for upcoming Serie A fixtures. The app automatically
