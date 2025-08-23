@@ -1,93 +1,109 @@
-{% extends 'layout.html' %}
+{% extends "layout.html" %}
+{% block title %}Standings{% endblock %}
+
 {% block content %}
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-    <div class="d-flex align-items-baseline gap-2">
-      <h1 class="h5 d-sm-none mb-0">Standings</h1>
-      <h1 class="h3 d-none d-sm-block mb-0">Standings</h1>
+<section class="page-header">
+  <h1 class="h1">Standings</h1>
+</section>
+
+<form class="board-controls" method="get" action="{{ url_for('leaderboard') }}">
+  <div class="controls-row">
+    <div class="control">
+      <label for="scope" class="label">Scope</label>
+      <select id="scope" name="scope" class="select">
+        <option value="season" {{ 'selected' if scope == 'season' else '' }}>Season</option>
+        <option value="week"   {{ 'selected' if scope == 'week' else '' }}>Matchday</option>
+        <option value="overall" {{ 'selected' if scope == 'overall' else '' }}>Overall</option>
+      </select>
     </div>
 
-    <!-- Filters -->
-    <form class="row gx-2 gy-2 align-items-end w-100 w-sm-auto" method="get" action="{{ url_for('leaderboard') }}">
-      <!-- Scope -->
-      <div class="col-12 col-sm-auto">
-        <label class="form-label small text-secondary mb-1 d-none d-sm-block">Scope</label>
-        <select class="form-select form-select-sm" name="scope" onchange="this.form.submit()">
-          <option value="overall" {% if scope == 'overall' %}selected{% endif %}>Overall (all seasons)</option>
-          <option value="season"  {% if scope == 'season'  %}selected{% endif %}>Season</option>
-          <option value="week"    {% if scope == 'week'    %}selected{% endif %}>Matchday</option>
-        </select>
-      </div>
+    <div class="control">
+      <label for="season" class="label">Season</label>
+      <select id="season" name="season" class="select">
+        {% for s in seasons %}
+          <option value="{{ s }}" {{ 'selected' if s == season else '' }}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
-      {% if scope in ['season', 'week'] %}
-      <!-- Season -->
-      <div class="col-12 col-sm-auto">
-        <label class="form-label small text-secondary mb-1 d-none d-sm-block">Season</label>
-        <select class="form-select form-select-sm" name="season" onchange="this.form.submit()">
-          {% for s in seasons %}
-            <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% endif %}
+    <div class="control" {% if scope != 'week' %}style="display:none"{% endif %}>
+      <label for="matchday" class="label">Matchday</label>
+      <select id="matchday" name="matchday" class="select">
+        {% for md in matchdays or [] %}
+          <option value="{{ md }}" {{ 'selected' if md|string == matchday|string else '' }}>{{ md }}</option>
+        {% endfor %}
+      </select>
+    </div>
 
-      {% if scope == 'week' %}
-      <!-- Matchday -->
-      <div class="col-12 col-sm-auto">
-        <label class="form-label small text-secondary mb-1 d-none d-sm-block">Matchday</label>
-        <select class="form-select form-select-sm" name="matchday" onchange="this.form.submit()">
-          {% for md in matchdays %}
-            <option value="{{ md }}" {% if md == matchday %}selected{% endif %}>MD {{ md }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      {% endif %}
-
-      <div class="col-12 col-sm-auto d-sm-none">
-        <button class="btn btn-primary btn-sm w-100" type="submit">Update</button>
-      </div>
-      <noscript><div class="col-12 col-sm-auto"><button class="btn btn-sm btn-primary" type="submit">Go</button></div></noscript>
-    </form>
+    <div class="control control--btn">
+      <button class="btn btn-primary" type="submit">Update</button>
+    </div>
   </div>
+</form>
 
+{% set heading %}
   {% if scope == 'overall' %}
-    <div class="text-secondary small mb-2">Overall = all predictions across all seasons.</div>
-  {% elif scope == 'season' %}
-    <div class="text-secondary small mb-2">Season {{ season }} ranking.</div>
-  {% elif scope == 'week' %}
-    <div class="text-secondary small mb-2">Season {{ season }} · Matchday {{ matchday }} ranking.</div>
-  {% endif %}
-
-  {% if not users %}
-    <div class="alert alert-secondary">No data yet.</div>
+    Overall ranking.
+  {% elif scope == 'week' and matchday %}
+    Matchday {{ matchday }} ranking.
   {% else %}
-    <div class="card shadow-sm">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="table-light-subtle">
-            <tr class="text-nowrap">
-              <th class="d-none d-sm-table-cell" style="width: 80px;">Rank</th>
-              <th>Username</th>
-              <th class="text-end" style="width: 140px;">Points</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in users %}
-              {# item is either a User object (overall) or a dict with username/points (season/week) #}
-              {% set uname = item.username if item.username is defined else item['username'] %}
-              {% set pts   = item.points   if item.points   is defined else item['points'] %}
-              <tr>
-                <td class="d-none d-sm-table-cell">{{ loop.index }}</td>
-                <td class="fw-semibold text-truncate" style="max-width: 280px;">
-                  <!-- On mobile, show rank as a subtle prefix badge -->
-                  <span class="badge bg-secondary-subtle text-secondary-emphasis d-inline d-sm-none me-2">{{ loop.index }}</span>
-                  {{ uname }}
-                </td>
-                <td class="fw-bold text-end">{{ pts }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    Season {{ season }} ranking.
   {% endif %}
+{% endset %}
+
+<p class="subtle">{{ heading|trim }}</p>
+
+<div class="table-card">
+  <table class="table table-striped">
+    <colgroup>
+      <col style="width: 80px" />
+      <col />
+      <col style="width: 120px" />
+    </colgroup>
+    <thead>
+      <tr>
+        <th scope="col" class="th num">Rank</th>
+        <th scope="col" class="th">Username</th>
+        <th scope="col" class="th num">Points</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if users and users|length > 0 %}
+        {% for u in users %}
+          {% if scope == 'overall' %}
+            {% set uname = u.username %}
+            {% set pts = u.points %}
+          {% else %}
+            {# u is a dict: {'username': ..., 'points': ...} #}
+            {% set uname = u.username if u.username is defined else u['username'] %}
+            {% set pts   = u.points   if u.points   is defined else u['points'] %}
+          {% endif %}
+          <tr>
+            <td class="td num">{{ loop.index }}</td>
+            <td class="td">{{ uname }}</td>
+            <td class="td num">{{ pts }}</td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td class="td" colspan="3" style="text-align:center; opacity:.8;">No data yet.</td>
+        </tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<p class="footnote">Times are shown in your local time. Data source: football-data.org (free tier).</p>
+
+<script>
+  // Toggle matchday selector based on Scope
+  const scope = document.getElementById('scope');
+  const mdControl = document.getElementById('matchday')?.closest('.control');
+  function toggleMatchday() {
+    if (!mdControl) return;
+    mdControl.style.display = (scope.value === 'week') ? '' : 'none';
+  }
+  scope?.addEventListener('change', toggleMatchday);
+  toggleMatchday();
+</script>
 {% endblock %}
