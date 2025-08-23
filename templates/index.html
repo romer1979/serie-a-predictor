@@ -2,10 +2,9 @@
 {% block title %}Fixtures · Serie A Predictor{% endblock %}
 
 {% block content %}
-  {% set first = fixtures[0] if fixtures else None %}
   <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
     <h1 style="margin:0;font-size:20px;">
-      {{ (first.season if first else 'Season') }} — Matchday {{ (first.matchday if first else '—') }}
+      {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
     </h1>
     {% if fixtures|length %}
       <button form="save-all-form" class="btn btn-primary" type="submit" style="padding:10px 18px;">💾 Save All Predictions</button>
@@ -16,7 +15,7 @@
     <div class="card">No fixtures to show. Check back soon!</div>
   {% else %}
   <div class="table-card">
-    <!-- One big form so all radios submit together -->
+    <!-- Single form for "Save All Predictions" -->
     <form id="save-all-form" method="post" action="{{ url_for('save_all_predictions') }}">
       <div class="table-responsive" style="overflow:auto;">
         <table class="table table-striped" style="min-width:980px;">
@@ -26,20 +25,27 @@
               <th class="th">Match</th>
               <th class="th" style="width:90px;">Status</th>
               <th class="th" style="min-width:210px;">Your Pick</th>
-              <th class="th">Players’ Picks</th>
+              {% for uid, uname in users_cols %}
+                <th class="th" title="{{ uname }}">{{ uname }}</th>
+              {% endfor %}
               <th class="th" style="width:110px;text-align:right;">Result</th>
             </tr>
           </thead>
+
           <tbody>
             {% for f in fixtures %}
               {% set my = user_predictions.get(f.id) %}
               {% set locked = not f.is_open_for_prediction() %}
+              {% set reveal = show_preds_flags.get(f.id) %}
               {% set outcome = f.outcome_code() %}
               <tr>
                 <!-- Kickoff -->
                 <td class="td">
                   <div class="fw-semibold">
-                    {{ f.match_date.strftime('%a %b %d · %H:%M') }}
+                    <time class="kickoff-local"
+                          data-utc="{{ f.match_date|utc_iso }}">
+                      {{ f.match_date }}
+                    </time>
                   </div>
                   <div class="tiny muted">MD {{ f.matchday or '—' }}</div>
                 </td>
@@ -51,24 +57,20 @@
 
                 <!-- Status -->
                 <td class="td">
-                  {% set s = 'TIMED' %}
                   {% if f.status in ['IN_PLAY','PAUSED'] %}
-                    {% set s = 'LIVE' %}
+                    <span class="pill live">LIVE</span>
                   {% elif f.status == 'FINISHED' %}
-                    {% set s = 'FT' %}
+                    <span class="pill finished">FT</span>
                   {% elif f.status in ['SCHEDULED','TIMED'] %}
-                    {% set s = 'TIMED' %}
+                    <span class="pill scheduled">TIMED</span>
                   {% else %}
-                    {% set s = f.status %}
+                    <span class="pill">{{ f.status }}</span>
                   {% endif %}
-                  <span class="pill {% if s == 'LIVE' %}live{% elif s == 'FT' %}finished{% else %}scheduled{% endif %}">
-                    {{ s }}
-                  </span>
                 </td>
 
-                <!-- Your pick (just radios; no per-row submit) -->
+                <!-- Your pick radios (no per-row submit) -->
                 <td class="td">
-                  <div class="choice" style="display:flex; gap:12px; align-items:center; justify-content:flex-start; flex-wrap:wrap;">
+                  <div class="choice" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
                     {% for opt,label in [('1','1'),('X','X'),('2','2')] %}
                       <label class="radio" style="text-align:center;">
                         <input
@@ -86,25 +88,20 @@
                   </div>
                 </td>
 
-                <!-- All users’ visible picks (after kickoff). Correct ones highlighted when result exists) -->
-                <td class="td">
-                  {% set picks = all_preds.get(f.id, []) %}
-                  {% if not locked %}
-                    <span class="tiny muted">Hidden until kickoff</span>
-                  {% elif picks|length == 0 %}
-                    <span class="tiny muted">No picks yet</span>
-                  {% else %}
-                    <div class="predictions-strip" style="flex-wrap:wrap;">
-                      {% for uname, sel in picks %}
-                        {% set correct = outcome is not none and sel == outcome %}
-                        <span class="pick-pill {% if correct %}pick-correct{% endif %}">
-                          <span class="pick-name">{{ uname }}</span>:
-                          <strong>{{ sel }}</strong>
-                        </span>
-                      {% endfor %}
-                    </div>
-                  {% endif %}
-                </td>
+                <!-- One column per user: reveal after kickoff; highlight correct -->
+                {% for uid, uname in users_cols %}
+                  {% set pick = pred_matrix.get((f.id, uid)) %}
+                  <td class="td user-col" style="text-align:center;font-variant-numeric:tabular-nums;">
+                    {% if reveal %}
+                      {% set correct = outcome is not none and pick and pick == outcome %}
+                      <span class="{% if correct %}pick-pill pick-correct{% endif %}">
+                        {{ pick or '—' }}
+                      </span>
+                    {% else %}
+                      <span class="muted tiny">—</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
 
                 <!-- Result -->
                 <td class="td num">
@@ -120,7 +117,7 @@
         </table>
       </div>
 
-      <!-- Sticky save on mobile still submits the same form -->
+      <!-- Sticky save helper (mobile/desktop) -->
       <div class="sticky-save" style="text-align:right;">
         <button class="btn btn-primary" type="submit">💾 Save All Predictions</button>
       </div>
@@ -130,5 +127,17 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- (Optional) You can add any small helpers here later -->
+<script>
+  // Render kickoff in local time + relative label (simple)
+  function fmt(dt){
+    const d = new Date(dt);
+    const opts = {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'};
+    return d.toLocaleString(undefined, opts);
+  }
+  document.querySelectorAll('.kickoff-local').forEach(el=>{
+    const iso = el.getAttribute('data-utc');
+    if (!iso) return;
+    el.textContent = fmt(iso);
+  });
+</script>
 {% endblock %}
