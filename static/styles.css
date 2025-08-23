@@ -129,5 +129,109 @@
   .table .th, .table .td { padding: .6rem .7rem; }
 }
 
+/* ========================================================= */
+/* ===============  HOMEPAGE MOBILE POLISH  ================= */
+/* ========================================================= */
 
+/* Slightly larger touch targets on mobile */
+@media (max-width: 768px) {
+  /* Let large tables (fixtures with many user columns) scroll horizontally */
+  .table-card {
+    overflow-x: auto;                 /* allow horizontal scroll */
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-card .table {
+    min-width: 720px;                 /* prevents squishing columns too much */
+  }
 
+  /* Compact type + spacing for fixtures */
+  .table .th, .table .td {
+    padding: .55rem .6rem;
+  }
+  .table {
+    font-size: 14px;
+  }
+
+  /* Kickoff & status pills a bit tighter */
+  .pill { font-size: .75rem; padding: .2rem .45rem; border-radius: 999px; }
+  .pill.live { background: rgba(220, 53, 69, .15); border: 1px solid rgba(220, 53, 69, .35); }
+  .pill.finished { background: rgba(25, 135, 84, .15); border: 1px solid rgba(25, 135, 84, .35); }
+  .pill.scheduled { background: rgba(108, 117, 125, .15); border: 1px solid rgba(108, 117, 125, .35); }
+
+  /* Prediction radio group (1 / X / 2) */
+  .choice {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: nowrap;
+  }
+  .choice .radio input {
+    width: 18px;
+    height: 18px;
+  }
+  .choice .tiny { font-size: .85rem; }
+
+  /* Buttons */
+  .btn { padding: .45rem .6rem; font-size: .95rem; }
+  .btn.tiny { padding: .3rem .5rem; font-size: .8rem; }
+
+  /* Save All Predictions CTA – make it prominent and thumb‑friendly */
+  .save-all-predictions-btn {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    bottom: 16px;
+    padding: .8rem 1.25rem;
+    font-size: 1rem;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  }
+}
+
+/* Super small screens (narrow phones) */
+@media (max-width: 480px) {
+  .table-card .table {
+    min-width: 600px;                 /* safely scrollable on very small screens */
+  }
+  .table { font-size: 13px; }
+  .table .th, .table .td { padding: .5rem .55rem; }
+
+  /* Radio label text */
+  .choice .tiny { font-size: .8rem; }
+
+  /* Subtle helper text */
+  .tiny { font-size: .78rem; }
+}
+
+/* Optional: sticky header row when scrolling horizontally on mobile (improves context) */
+@media (max-width: 768px) {
+  .table thead th.th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    backdrop-filter: blur(4px);
+  }
+}
+
+/* Optional: when tables are very wide, keep the first two columns visible while scrolling */
+@media (max-width: 768px) {
+  /* Applies to all tables inside .table-card (good for fixtures); comment out if undesired on other tables */
+  .table-card .table th.th:first-child,
+  .table-card .table td.td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(4px);
+  }
+  .table-card .table th.th:nth-child(2),
+  .table-card .table td.td:nth-child(2) {
+    position: sticky;
+    left: 100px; /* approximate width of first column; adjust if needed */
+    z-index: 1;
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(4px);
+  }
+}
