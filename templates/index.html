@@ -1,136 +1,376 @@
-{% extends "base.html" %}
-{% block title %}Fixtures · Serie A Predictor{% endblock %}
+{% extends "layout.html" %}
+{% block title %}Fixtures & Predictions{% endblock %}
+
 {% block content %}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 
-<section class="panel">
-  <div class="panel-head">
-    <h1 class="panel-title">Upcoming fixtures</h1>
-    <div class="panel-actions">
-      <form action="{{ url_for('save_all_predictions') }}" method="post">
-        <button class="btn btn-primary">Save all picks</button>
-      </form>
-      {% if current_user.is_admin %}
-      <form action="{{ url_for('admin_refresh') }}" method="post">
-        <button class="btn btn-outline">Refresh fixtures</button>
-      </form>
+<style>
+  /* Page scaffolding */
+  .page-header {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin-bottom: 1rem;
+  }
+  .page-header .badge {
+    font-weight: 600;
+    letter-spacing: .02em;
+  }
+
+  /* Sticky save bar */
+  .save-bar {
+    position: sticky;
+    top: 0;
+    z-index: 1040;
+    background: rgba(255,255,255,.9);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid rgba(0,0,0,.06);
+  }
+
+  /* Cards list */
+  .fixture-card {
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 14px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.04);
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .teams {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: .5rem;
+    align-items: center;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+  .teams .home,
+  .teams .away {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .teams .vs {
+    font-weight: 700;
+    color: var(--bs-secondary-color);
+  }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem .75rem;
+    align-items: center;
+    margin-top: .5rem;
+    color: var(--bs-secondary-color);
+    font-size: .95rem;
+  }
+
+  .score {
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    letter-spacing: .02em;
+  }
+
+  .badge-live {
+    background: #e60;
+    color: #fff;
+    animation: pulse 1.5s infinite ease-in-out;
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(230,96,0,.6) }
+    70% { box-shadow: 0 0 0 10px rgba(230,96,0,0) }
+    100% { box-shadow: 0 0 0 0 rgba(230,96,0,0) }
+  }
+
+  /* Prediction chip group */
+  .pick-group {
+    display: inline-flex;
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .pick-group input { display: none; }
+  .pick {
+    padding: .35rem .7rem;
+    min-width: 2.25rem;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+    user-select: none;
+    color: var(--bs-secondary-color);
+    background: #fff;
+  }
+  .pick + .pick { border-left: 1px solid rgba(0,0,0,.08); }
+  .pick-group input:checked + .pick {
+    color: #0a0a0a;
+    background: #eef6ff;
+  }
+  .pick-group input:disabled + .pick {
+    opacity: .5;
+    cursor: not-allowed;
+  }
+
+  /* “Others picks” matrix */
+  .matrix {
+    margin-top: .75rem;
+    border-top: 1px dashed rgba(0,0,0,.1);
+    padding-top: .75rem;
+  }
+  .matrix table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .matrix th, .matrix td {
+    font-variant-numeric: tabular-nums;
+    font-size: .9rem;
+    padding: .35rem .5rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .matrix th:first-child, .matrix td:first-child {
+    text-align: left;
+  }
+  .matrix thead th {
+    position: sticky;
+    top: 56px; /* below sticky bar */
+    background: #fff;
+    z-index: 1;
+  }
+  .pill {
+    display: inline-block;
+    min-width: 1.6rem;
+    padding: .1rem .45rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0,0,0,.12);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .pill-1 { background: #e8f5e9; }
+  .pill-X { background: #fff8e1; }
+  .pill-2 { background: #e3f2fd; }
+
+  /* Empty state */
+  .empty {
+    border: 2px dashed rgba(0,0,0,.12);
+    border-radius: 14px;
+    padding: 2rem;
+    text-align: center;
+    color: var(--bs-secondary-color);
+  }
+</style>
+
+<div class="save-bar py-2 mb-3">
+  <div class="container d-flex align-items-center justify-content-between gap-2">
+    <div class="page-header">
+      <h1 class="h4 m-0">Serie A — Fixtures & Predictions</h1>
+      {% set live_count = fixtures|selectattr('status','in',['IN_PLAY','PAUSED'])|list|length %}
+      {% if live_count > 0 %}
+        <span class="badge badge-live rounded-pill">LIVE: {{ live_count }}</span>
       {% endif %}
+      <span class="badge text-bg-light rounded-pill">Local time shown</span>
     </div>
+    <form action="{{ url_for('save_all_predictions') }}" method="POST" class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary">
+        Save all predictions
+      </button>
+      <a class="btn btn-outline-secondary" href="{{ url_for('index') }}">Refresh</a>
+    </form>
   </div>
+</div>
 
-  {% if fixtures %}
-  <div class="table-wrap">
-    <table class="data-table" data-sortable>
-      <thead>
-        <tr>
-          <th class="sm" data-sort>MD</th>
-          <th data-sort>Fixture</th>
-          <th class="md" data-sort>Date / Time (ET)</th>
-          <th class="sm" data-sort>Status</th>
-          <th class="sm center" data-sort>Score</th>
-          <th class="lg center">Your Pick</th>
-          <th class="lg">All Picks (revealed after kickoff)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for f in fixtures %}
-          {% set kickoff_iso = f.match_date.isoformat() %}
-          {% set is_open = f.is_open_for_prediction() %}
-          <tr>
-            <td class="muted sm" data-sort-value="{{ f.matchday or '' }}">{{ f.matchday or '—' }}</td>
-
-            <td>
-              <div class="teams">
-                <span class="team">{{ f.home_team }}</span>
-                <span class="vs">vs</span>
-                <span class="team">{{ f.away_team }}</span>
-              </div>
-            </td>
-
-            <td class="md" data-sort-value="{{ f.match_date.timestamp() }}">
-              <div class="when">
-                <div class="date">{{ f.match_date.strftime('%a, %b %d') }}</div>
-                <div class="time">{{ f.match_date.strftime('%H:%M') }} <span class="tz">ET</span></div>
-                <div class="countdown">
-                  <span class="badge" data-kickoff-iso="{{ kickoff_iso }}">—</span>
-                </div>
-              </div>
-            </td>
-
-            <td class="sm">
-              {% if f.status in ['IN_PLAY','PAUSED'] %}
-                <span class="chip live">LIVE</span>
-              {% elif f.status == 'FINISHED' %}
-                <span class="chip finished">FINISHED</span>
-              {% else %}
-                <span class="chip scheduled">SCHEDULED</span>
-              {% endif %}
-            </td>
-
-            <td class="sm center">
-              {% if f.home_score is not none and f.away_score is not none %}
-                <strong>{{ f.home_score }}–{{ f.away_score }}</strong>
-              {% else %}
-                <span class="muted">—</span>
-              {% endif %}
-            </td>
-
-            <td class="lg center">
-              <div class="pick-wrap {% if not is_open %}locked{% endif %}">
-                <label class="pick">
-                  <input type="radio" name="fixture_{{ f.id }}" form="bulkForm" value="1"
-                    {% if user_predictions.get(f.id) and user_predictions.get(f.id).selection == '1' %}checked{% endif %}
-                    {% if not is_open %}disabled{% endif %}>
-                  <span>1</span>
-                  <small>{{ f.home_team }}</small>
-                </label>
-                <label class="pick">
-                  <input type="radio" name="fixture_{{ f.id }}" form="bulkForm" value="X"
-                    {% if user_predictions.get(f.id) and user_predictions.get(f.id).selection == 'X' %}checked{% endif %}
-                    {% if not is_open %}disabled{% endif %}>
-                  <span>X</span>
-                  <small>Draw</small>
-                </label>
-                <label class="pick">
-                  <input type="radio" name="fixture_{{ f.id }}" form="bulkForm" value="2"
-                    {% if user_predictions.get(f.id) and user_predictions.get(f.id).selection == '2' %}checked{% endif %}
-                    {% if not is_open %}disabled{% endif %}>
-                  <span>2</span>
-                  <small>{{ f.away_team }}</small>
-                </label>
-              </div>
-            </td>
-
-            <td>
-              {% if is_open %}
-                <span class="muted">Hidden until kickoff</span>
-              {% else %}
-                {% set preds = all_preds.get(f.id, []) %}
-                {% if preds %}
-                  <div class="all-picks">
-                    {% for uname, sel in preds %}
-                      <span class="pill" title="{{ uname }}">{{ sel }}</span>
-                    {% endfor %}
-                  </div>
-                {% else %}
-                  <span class="muted">No picks yet</span>
-                {% endif %}
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <form id="bulkForm" method="post" action="{{ url_for('save_all_predictions') }}" class="bulk-save">
-    <button class="btn btn-primary">Save all selected picks</button>
-  </form>
-  {% else %}
-    <div class="empty-state">
-      <h2>No upcoming fixtures yet</h2>
-      <p>Check back soon. We’ll pull new fixtures automatically.</p>
+<div class="container">
+  {% if fixtures|length == 0 %}
+    <div class="empty">
+      <div class="mb-2">No fixtures in the next week.</div>
+      <div class="small">Check back later or ask an admin to refresh.</div>
     </div>
   {% endif %}
-</section>
 
+  {% for f in fixtures %}
+    {% set is_live = f.status in ['IN_PLAY','PAUSED'] %}
+    {% set is_finished = f.status == 'FINISHED' %}
+    {% set is_open = f.is_open_for_prediction() %}
+    {% set your_pick = user_predictions.get(f.id).selection if user_predictions.get(f.id) else None %}
+    {% set show_preds = show_preds_flags.get(f.id) %}
+
+    <div class="fixture-card" data-live="{{ 1 if is_live else 0 }}">
+      <!-- Teams + score/status -->
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="teams">
+          <div class="home text-truncate">{{ f.home_team }}</div>
+          <div class="vs">vs</div>
+          <div class="away text-truncate text-end">{{ f.away_team }}</div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          {% if is_live %}
+            <span class="badge badge-live rounded-pill">LIVE</span>
+          {% elif is_finished %}
+            <span class="badge text-bg-dark rounded-pill">FT</span>
+          {% else %}
+            <span class="badge text-bg-light rounded-pill">{{ f.status }}</span>
+          {% endif %}
+
+          <div class="score">
+            {% if f.home_score is not none and f.away_score is not none %}
+              {{ f.home_score }}–{{ f.away_score }}
+            {% else %}
+              {% if is_live %}<span class="text-danger">•</span>{% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Meta line -->
+      <div class="meta">
+        <div>
+          <i class="bi bi-calendar-event"></i>
+          <time class="local-time"
+                data-utc="{{ f.match_date|utc_iso }}"
+                title="{{ f.match_date|utc_iso }}">
+            <!-- filled by JS -->
+          </time>
+        </div>
+        {% if f.matchday %}
+          <span>Matchday {{ f.matchday }}</span>
+        {% endif %}
+        {% if f.season %}
+          <span class="text-muted">Season {{ f.season }}</span>
+        {% endif %}
+      </div>
+
+      <!-- Your pick -->
+      <div class="mt-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <div class="d-flex align-items-center gap-2">
+          <span class="text-muted">Your pick:</span>
+
+          <div class="pick-group">
+            <input id="p1_{{ f.id }}" type="radio" name="fixture_{{ f.id }}" value="1"
+                   form="bulk-form" {% if your_pick == '1' %}checked{% endif %} {% if not is_open %}disabled{% endif %}>
+            <label class="pick" for="p1_{{ f.id }}">1</label>
+
+            <input id="pX_{{ f.id }}" type="radio" name="fixture_{{ f.id }}" value="X"
+                   form="bulk-form" {% if your_pick == 'X' %}checked{% endif %} {% if not is_open %}disabled{% endif %}>
+            <label class="pick" for="pX_{{ f.id }}">X</label>
+
+            <input id="p2_{{ f.id }}" type="radio" name="fixture_{{ f.id }}" value="2"
+                   form="bulk-form" {% if your_pick == '2' %}checked{% endif %} {% if not is_open %}disabled{% endif %}>
+            <label class="pick" for="p2_{{ f.id }}">2</label>
+          </div>
+
+          {% if not is_open %}
+            <span class="badge text-bg-secondary">Locked</span>
+          {% else %}
+            <span class="badge text-bg-info">Open</span>
+          {% endif %}
+        </div>
+
+        {% if is_finished and your_pick %}
+          {% set outcome = '1' if f.home_score > f.away_score else ('2' if f.home_score < f.away_score else 'X') %}
+          {% set correct = (your_pick == outcome) %}
+          <span class="badge {{ 'text-bg-success' if correct else 'text-bg-danger' }}">
+            {{ '✓ +1 point (correct)' if correct else '0 points' }}
+          </span>
+        {% endif %}
+      </div>
+
+      <!-- Others’ picks (revealed after KO / while live / after FT) -->
+      {% if users_cols and show_preds %}
+        <div class="matrix">
+          <div class="small text-muted mb-1">Others’ picks</div>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Pick</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for uid, uname in users_cols %}
+                  {% set pick = pred_matrix.get((f.id, uid)) %}
+                  <tr>
+                    <td class="text-truncate">{{ uname }}</td>
+                    <td>
+                      {% if pick %}
+                        <span class="pill pill-{{ pick }}">{{ pick }}</span>
+                      {% else %}
+                        <span class="text-muted">—</span>
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% elif users_cols and not show_preds %}
+        <div class="matrix">
+          <div class="small text-muted">Others’ picks will be revealed at kickoff.</div>
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
+
+  <!-- Hidden bulk form used by the sticky save button -->
+  <form id="bulk-form" action="{{ url_for('save_all_predictions') }}" method="POST"></form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.js"></script>
+<script>
+  // Convert UTC ISO in data-utc -> local readable string
+  function renderLocalTimes() {
+    const opts = { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+    document.querySelectorAll('.local-time').forEach(el => {
+      const iso = el.getAttribute('data-utc');
+      if (!iso) return;
+      const d = new Date(iso); // ISO UTC
+      if (!isNaN(d)) {
+        // Example output: Sat, Aug 23, 14:00
+        el.textContent = d.toLocaleString(undefined, opts);
+      }
+    });
+  }
+
+  // Auto-refresh if any live fixtures are present
+  function scheduleAutoRefresh() {
+    const anyLive = !!document.querySelector('.fixture-card[data-live="1"]');
+    if (anyLive) {
+      setTimeout(() => window.location.reload(), 60000); // 60s
+    } else {
+      // If upcoming within 2 hours, refresh every 60s (server throttle handles API calls)
+      const soon = Array.from(document.querySelectorAll('.local-time'))
+        .some(el => {
+          const iso = el.getAttribute('data-utc');
+          const d = new Date(iso);
+          const now = new Date();
+          const diff = (d - now) / 1000; // seconds
+          return diff > 0 && diff <= 7200; // next 2 hours
+        });
+      if (soon) setTimeout(() => window.location.reload(), 60000);
+    }
+  }
+
+  // Improve usability: clicking a chip submits the bulk form after small debounce
+  function wireAutoSave() {
+    const form = document.getElementById('bulk-form');
+    let timer = null;
+    document.querySelectorAll('.pick-group input').forEach(inp => {
+      inp.addEventListener('change', () => {
+        if (!form) return;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          // Don’t auto-submit if locked
+          if (inp.disabled) return;
+          form.requestSubmit();
+        }, 400);
+      });
+    });
+  }
+
+  renderLocalTimes();
+  scheduleAutoRefresh();
+  wireAutoSave();
+</script>
 {% endblock %}
