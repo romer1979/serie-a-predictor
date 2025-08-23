@@ -2,93 +2,139 @@
 {% block title %}Fixtures · Serie A Predictor{% endblock %}
 
 {% block content %}
-  <div class="section-title">
+  <div class="section-title" style="display:flex;align-items:center;gap:12px;justify-content:space-between;">
     <h1 style="margin:0;font-size:20px">Upcoming & Live Fixtures</h1>
-    <form action="{{ url_for('save_all_predictions') }}" method="post">
-      <button class="btn primary tiny" type="submit">Save all my picks</button>
+    <form method="post" action="{{ url_for('save_all_predictions') }}">
+      <button class="btn btn-primary" type="submit">Save all my picks</button>
     </form>
   </div>
 
   {% if fixtures|length == 0 %}
     <div class="card">No fixtures in the next 7 days. Check back soon!</div>
-  {% endif %}
-
-  <div class="cards">
-    {% for f in fixtures %}
-      {% set is_live = f.status in ('IN_PLAY','PAUSED') %}
-      {% set is_finished = f.status == 'FINISHED' %}
-      {% set is_locked = not f.is_open_for_prediction() %}
-      {% set my = user_predictions.get(f.id) %}
-      <article class="card" aria-labelledby="fx-{{ f.id }}">
-        <div class="row">
-          <div class="teams">
-            <span id="fx-{{ f.id }}">
-              <span>{{ f.home_team }}</span>
-              <span class="muted tiny">vs</span>
-              <span>{{ f.away_team }}</span>
-            </span>
-            <span class="tiny muted">
-              <time class="kick" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=namespace().tz if false else None))|utc_iso }}">{{ f.match_date }}</time>
-            </span>
-          </div>
-
-          <div class="row" style="gap:10px">
-            {% if is_live %}
-              <span class="pill live">LIVE</span>
-            {% elif is_finished %}
-              <span class="pill finished">FT</span>
-            {% else %}
-              <span class="pill scheduled">{{ f.status }}</span>
-            {% endif %}
-            <div class="score">
-              {% if f.home_score is not none and f.away_score is not none %}
-                {{ f.home_score }}&nbsp;–&nbsp;{{ f.away_score }}
-              {% else %}
-                <span class="muted">–</span>
-              {% endif %}
-            </div>
-          </div>
-        </div>
-
-        <!-- Your pick -->
-        <div class="row" style="margin-top:12px">
-          <form class="choice" action="{{ url_for('predict', fixture_id=f.id) }}" method="post">
-            {% for opt,label in [('1','Home'),('X','Draw'),('2','Away')] %}
-              <label class="radio">
-                <input type="radio" name="selection" value="{{ opt }}"
-                  {% if my and my.selection == opt %}checked{% endif %}
-                  {% if is_locked %}disabled{% endif %} />
-                <span class="tiny">{{ label }}</span>
-              </label>
+  {% else %}
+  <div class="table-card">
+    <div class="table-responsive" style="overflow:auto;">
+      <table class="table table-striped" style="min-width:980px;">
+        <thead>
+          <tr>
+            <th class="th" style="min-width:180px;">Kickoff (local)</th>
+            <th class="th">Match</th>
+            <th class="th" style="width:100px;">Status</th>
+            <th class="th" style="min-width:230px;">Your Pick</th>
+            {% for uid, uname in users_cols %}
+              <th class="th" title="{{ uname }}">{{ uname }}</th>
             {% endfor %}
-            <button class="btn tiny" type="submit" {% if is_locked %}disabled{% endif %}>
-              {% if my %}Update{% else %}Pick{% endif %}
-            </button>
-          </form>
+            <th class="th" style="width:110px;text-align:right;">Result</th>
+          </tr>
+        </thead>
 
-          {% if is_locked and not is_finished %}
-            <span class="tiny muted">Locked at kickoff</span>
-          {% endif %}
-        </div>
+        <tbody>
+          {% for f in fixtures %}
+            {% set my = user_predictions.get(f.id) %}
+            {% set locked = not f.is_open_for_prediction() %}
+            {% set reveal = show_preds_flags.get(f.id) %}
+            <tr>
+              <!-- Kickoff -->
+              <td class="td">
+                <div>
+                  <time class="kickoff-local"
+                        data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
+                    {{ f.match_date }}
+                  </time>
+                </div>
+                <div class="tiny subtle kickoff-rel"></div>
+              </td>
 
-        <!-- Group picks (revealed at/after kickoff or if live/paused/finished) -->
-        {% if show_preds_flags.get(f.id) %}
-          <div class="stack" style="margin-top:12px">
-            <div class="tiny muted">Predictions</div>
-            <div class="preds">
-              {% for (uid, uname) in users_cols %}
-                {% set pick = pred_matrix.get((f.id, uid)) %}
-                {% if pick %}
-                  <span class="chip">{{ uname }}: {{ pick }}</span>
+              <!-- Match -->
+              <td class="td">
+                <div class="fw-semibold">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+                <div class="tiny muted">Matchday {{ f.matchday or '—' }}</div>
+              </td>
+
+              <!-- Status -->
+              <td class="td">
+                {% if f.status in ['IN_PLAY','PAUSED'] %}
+                  <span class="pill live">LIVE</span>
+                {% elif f.status == 'FINISHED' %}
+                  <span class="pill finished">FT</span>
+                {% elif f.status in ['SCHEDULED','TIMED'] %}
+                  <span class="pill scheduled">TIMED</span>
+                {% else %}
+                  <span class="pill">{{ f.status }}</span>
                 {% endif %}
+              </td>
+
+              <!-- Your pick (editable until lock) -->
+              <td class="td">
+                <form class="choice" action="{{ url_for('predict', fixture_id=f.id) }}" method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                  {% for opt,label in [('1','Home'),('X','Draw'),('2','Away')] %}
+                    <label class="radio">
+                      <input type="radio" name="selection" value="{{ opt }}"
+                             {% if my and my.selection == opt %}checked{% endif %}
+                             {% if locked %}disabled{% endif %}>
+                      <span class="tiny">{{ label }}</span>
+                    </label>
+                  {% endfor %}
+                  <button class="btn tiny" type="submit" {% if locked %}disabled{% endif %}>
+                    {% if my %}Update{% else %}Pick{% endif %}
+                  </button>
+                  {% if locked and f.status != 'FINISHED' %}
+                    <span class="tiny muted">Locked</span>
+                  {% endif %}
+                </form>
+              </td>
+
+              <!-- One column per user: prediction shown only when allowed -->
+              {% for uid, uname in users_cols %}
+                {% set pick = pred_matrix.get((f.id, uid)) %}
+                <td class="td" style="text-align:center;font-variant-numeric:tabular-nums;">
+                  {% if reveal %}
+                    {{ pick or '—' }}
+                  {% else %}
+                    <span class="muted tiny">—</span>
+                  {% endif %}
+                </td>
               {% endfor %}
-              {% if users_cols|length == 0 %}
-                <span class="muted tiny">No predictions yet.</span>
-              {% endif %}
-            </div>
-          </div>
-        {% endif %}
-      </article>
-    {% endfor %}
+
+              <!-- Result -->
+              <td class="td" style="text-align:right;font-variant-numeric:tabular-nums;">
+                {% if f.home_score is not none and f.away_score is not none %}
+                  <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
+  {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Render kickoff in local time + relative label
+  function fmt(dt){
+    const d = new Date(dt);
+    const opts = {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'};
+    return d.toLocaleString(undefined, opts);
+  }
+  function rel(dt){
+    const d = new Date(dt);
+    const diff = d - new Date();
+    const mins = Math.round(Math.abs(diff)/60000);
+    if (mins < 60) return (diff>0?'in ':'') + mins + ' min' + (mins!==1?'s':'') + (diff<0?' ago':'');
+    const hrs = Math.round(mins/60);
+    return (diff>0?'in ':'') + hrs + ' hour' + (hrs!==1?'s':'') + (diff<0?' ago':'');
+  }
+  document.querySelectorAll('.kickoff-local').forEach(el=>{
+    const iso = el.getAttribute('data-utc');
+    if (!iso) return;
+    el.textContent = fmt(iso);
+    const relEl = el.parentElement.nextElementSibling;
+    if (relEl && relEl.classList.contains('kickoff-rel')) relEl.textContent = rel(iso);
+  });
+</script>
 {% endblock %}
