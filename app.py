@@ -509,6 +509,46 @@ def latest_completed_matchday(season: str) -> str | None:
     except Exception:
         return sorted(set(days))[-1]
 
+def current_home_matchday(season: str) -> str | None:
+    """
+    Choose which matchday to show on the Home page:
+    1) If any fixture is LIVE/PAUSED -> that matchday.
+    2) Else the matchday of the earliest UPCOMING/TIMED fixture (>= now).
+    3) Else the latest COMPLETED matchday (end-of-season fallback).
+    Returns the matchday as a string, or None if season has no fixtures.
+    """
+    if not season:
+        return None
+
+    now_utc = datetime.now(timezone.utc)
+
+    # 1) Prefer any live matchday
+    live = (
+        db.session.query(Fixture.matchday)
+        .filter(Fixture.season == season, Fixture.status.in_(('IN_PLAY', 'PAUSED')))
+        .order_by(Fixture.matchday.asc())
+        .first()
+    )
+    if live and live[0]:
+        return str(live[0])
+
+    # 2) Matchday of the earliest upcoming fixture (SCHEDULED/TIMED with kickoff >= now)
+    upcoming = (
+        db.session.query(Fixture.matchday, Fixture.match_date)
+        .filter(
+            Fixture.season == season,
+            Fixture.status.in_(('SCHEDULED', 'TIMED')),
+            Fixture.match_date >= now_utc,
+        )
+        .order_by(Fixture.match_date.asc())
+        .first()
+    )
+    if upcoming and upcoming[0]:
+        return str(upcoming[0])
+
+    # 3) Latest completed matchday (if season is between rounds or finished)
+    return latest_completed_matchday(season)
+
 def weekly_user_points(season: str, matchday: str):
     rows = (
         db.session.query(
@@ -587,27 +627,61 @@ def season_user_points(season: str):
 # Routes
 # -----------------------------------------------------------------------------
 
-@app.route("/")
+@app.route('/')
 @login_required
 def index():
     update_fixtures_adaptive()
 
-    fixtures = upcoming_fixtures()
+    # Decide which season & matchday to show
+    season = current_season_from_db()
+    if not season:
+        flash("No season data available yet.", "warning")
+        return render_template(
+            'index.html',
+            fixtures=[],
+            user_predictions={},
+            users_cols=[],
+            pred_matrix={},
+            show_preds_flags={},
+            season=None,
+            matchday=None,
+        )
+
+    md = current_home_matchday(season)
+    if not md:
+        flash("No matchdays available yet.", "warning")
+        return render_template(
+            'index.html',
+            fixtures=[],
+            user_predictions={},
+            users_cols=[],
+            pred_matrix={},
+            show_preds_flags={},
+            season=season,
+            matchday=None,
+        )
+
+    # Pull fixtures for THIS matchday only
+    fixtures = (
+        Fixture.query
+        .filter(Fixture.season == season, Fixture.matchday == str(md))
+        .order_by(Fixture.match_date.asc())
+        .all()
+    )
+
     user_predictions = {p.fixture_id: p for p in current_user.predictions}
 
     users_cols, pred_matrix, show_flags = prediction_matrix(fixtures)
 
-    # A simple flag to highlight live rows in the template
-    live_flags = {f.id: (f.status in ("IN_PLAY", "PAUSED")) for f in fixtures}
-
     return render_template(
-        "index.html",
+        'index.html',
         fixtures=fixtures,
         user_predictions=user_predictions,
         users_cols=users_cols,
         pred_matrix=pred_matrix,
         show_preds_flags=show_flags,
-        live_flags=live_flags,
+        season=season,
+        matchday=md,  # <-- tell the template which matchday we’re on
     )
 
 @app.route("/predict/<int:fixture_id>", methods=["POST"])
