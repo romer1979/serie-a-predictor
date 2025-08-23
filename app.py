@@ -290,35 +290,59 @@ def update_fixtures() -> None:
     fixtures_to_use = fixtures_from_api if fixtures_from_api else fetch_fixtures_from_fallback()
 
     for fi in fixtures_to_use:
-        existing = Fixture.query.filter_by(match_id=fi["match_id"]).first()
-        if existing:
-            updated = False
-            # status
-            if fi["status"] and fi["status"] != existing.status:
-                existing.status = fi["status"]; updated = True
-            # live/finished scores
-            if fi["home_score"] is not None and fi["home_score"] != existing.home_score:
-                existing.home_score = fi["home_score"]; updated = True
-            if fi["away_score"] is not None and fi["away_score"] != existing.away_score:
-                existing.away_score = fi["away_score"]; updated = True
-            # ensure kickoff stays correct if API corrects it
-            if fi["match_date"] and fi["match_date"] != existing.match_date:
-                existing.match_date = fi["match_date"]; updated = True
-            if updated:
-                db.session.add(existing)
-        else:
-            db.session.add(Fixture(
-                match_id=fi["match_id"],
-                match_date=fi["match_date"],
-                home_team=fi["home_team"],
-                away_team=fi["away_team"],
-                season=fi["season"],
-                matchday=fi.get("matchday"),
-                status=fi["status"],
-                home_score=fi["home_score"],
-                away_score=fi["away_score"],
-            ))
-
+                existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
+                if existing:
+                    updated = False
+                    if fi['status'] != existing.status:
+                        existing.status = fi['status']; updated = True
+                    if fi['home_score'] is not None and fi['home_score'] != existing.home_score:
+                        existing.home_score = fi['home_score']; updated = True
+                    if fi['away_score'] is not None and fi['away_score'] != existing.away_score:
+                        existing.away_score = fi['away_score']; updated = True
+                    if updated:
+                        db.session.add(existing)
+                else:
+                    # --- NEW: try to reconcile a legacy/fallback row by teams + kickoff time ---
+                    from sqlalchemy import and_
+                    dt = fi['match_date']
+                    # 12h window to be tolerant of timezone differences
+                    lo = dt - timedelta(hours=12)
+                    hi = dt + timedelta(hours=12)
+                    legacy = (
+                        Fixture.query
+                        .filter(
+                            Fixture.season == fi['season'],
+                            func.lower(Fixture.home_team) == fi['home_team'].lower(),
+                            func.lower(Fixture.away_team) == fi['away_team'].lower(),
+                            Fixture.match_date >= lo,
+                            Fixture.match_date <= hi,
+                        )
+                        .order_by(Fixture.match_date.asc())
+                        .first()
+                    )
+                    if legacy:
+                        # Adopt the official API id and update fields in-place
+                        legacy.match_id = fi['match_id']
+                        legacy.status = fi['status']
+                        legacy.home_score = fi['home_score']
+                        legacy.away_score = fi['away_score']
+                        if abs((legacy.match_date - dt).total_seconds()) > 60:
+                            legacy.match_date = dt  # normalize to the API UTC time
+                        db.session.add(legacy)
+                    else:
+                        # No legacy row; insert fresh
+                        db.session.add(Fixture(
+                            match_id=fi['match_id'],
+                            match_date=fi['match_date'],
+                            home_team=fi['home_team'],
+                            away_team=fi['away_team'],
+                            season=fi['season'],
+                            matchday=fi.get('matchday'),
+                            status=fi['status'],
+                            home_score=fi['home_score'],
+                            away_score=fi['away_score'],
+                        ))
+        
     db.session.commit()
     evaluate_predictions()  # finalize finished games
 
