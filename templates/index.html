@@ -2,13 +2,15 @@
 {% block title %}Fixtures · Serie A Predictor{% endblock %}
 
 {% block content %}
-  <div style="margin-top: 20px; text-align: center;">
-    <form action="{{ url_for('save_all_predictions') }}" method="post">
-      <button class="btn btn-primary" type="submit" style="padding:10px 25px; font-size:1.1em;">
-        💾 Save All Predictions
-      </button>
+  <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+    <h1 style="margin:0;font-size:20px;">
+      {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
+    </h1>
+    <form method="post" action="{{ url_for('save_all_predictions') }}">
+      <button class="btn btn-primary" type="submit" style="padding:10px 18px;">💾 Save All Predictions</button>
     </form>
   </div>
+
 
   {% if fixtures|length == 0 %}
     <div class="card">No fixtures in the next 7 days. Check back soon!</div>
