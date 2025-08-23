@@ -326,7 +326,7 @@ def _adaptive_min_interval() -> timedelta:
         .count()
     )
     if today > 0:
-        return timedelta(hours=6)
+        return timedelta(seconds=60)
 
     return timedelta(hours=24)
 
