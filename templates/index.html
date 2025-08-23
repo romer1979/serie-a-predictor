@@ -53,15 +53,14 @@
 
               <!-- Status -->
               <td class="td">
-                {% if f.status in ['IN_PLAY','PAUSED'] %}
-                  <span class="pill live">LIVE</span>
-                {% elif f.status == 'FINISHED' %}
-                  <span class="pill finished">FT</span>
-                {% elif f.status in ['SCHEDULED','TIMED'] %}
-                  <span class="pill scheduled">TIMED</span>
-                {% else %}
-                  <span class="pill">{{ f.status }}</span>
-                {% endif %}
+                {% set s = f.display_status() %}
+                <span class="pill
+                            {% if s == 'LIVE' %} live
+                            {% elif s == 'FT' %} finished
+                            {% else %} scheduled
+                            {% endif %}">
+                  {{ s }}
+                </span>
               </td>
 
               <!-- Your pick (editable until lock) -->
