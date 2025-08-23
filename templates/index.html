@@ -1,140 +1,148 @@
-{% extends 'layout.html' %}
-{% block content %}
-  <div class="d-flex align-items-center justify-content-between mb-3">
-    <h1 class="h3 mb-0">Upcoming Fixtures</h1>
-    <span class="text-secondary small">Kickoff times shown in your local time</span>
-  </div>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Serie A Fixtures</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 24px; }
+    h1 { margin: 0 0 8px; }
+    .note { color: #555; margin: 0 0 24px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; }
+    th.status, td.status { text-align: center; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+    .b-upcoming { background: #eef6ff; color: #155fa0; }
+    .b-live     { background: #fff4d6; color: #79520a; }
+    .b-ft       { background: #eaf7ea; color: #246b2f; }
+    .muted { color: #777; }
+    .nowrap { white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <h1>Serie A Fixtures</h1>
+  <p class="note">Kickoff is shown in <strong>your local time</strong>. Source times are in Italy local time.</p>
 
-  {% if not fixtures %}
-    <div class="alert alert-secondary">No fixtures scheduled in the next 7 days.</div>
-  {% else %}
-    <div class="card shadow-sm">
-      <div class="card-body p-0">
-        <!-- ONE form for all fixtures -->
-        <form method="post" action="{{ url_for('save_all_predictions') }}" autocomplete="off" novalidate>
-          <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-              <thead class="table-light-subtle">
-                <tr>
-                  <th style="width: 190px;">Kickoff (your time)</th>
-                  <th>Match</th>
-                  <th style="width: 260px;">Your Pick</th>
-                  <th style="width: 160px;">Result / Status</th>
-                  <th style="width: 320px;">Predictions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for f in fixtures %}
-                  {% set myp = user_predictions.get(f.id) %}
-                  <tr>
-                    <td class="text-nowrap">
-                      <!-- Use ISO 8601 with offset so JS can turn it into user's local time -->
-                      <time class="kickoff" datetime="{{ f.match_date.isoformat() }}">
-                        {{ f.match_date.strftime('%a %b %d, %H:%M') }}
-                      </time>
-                    </td>
+  <table id="fx-table">
+    <thead>
+      <tr>
+        <th>Match</th>
+        <th>Kickoff (local)</th>
+        <th class="status">Status</th>
+        <th class="nowrap">Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in fixtures %}
+      <tr data-id="{{ f.id }}">
+        <td>{{ f.home }} vs {{ f.away }}</td>
 
-                    <td>
-                      <div class="fw-semibold">{{ f.home_team }} <span class="text-secondary">vs</span> {{ f.away_team }}</div>
-                      <div class="text-secondary small">Matchday {{ f.matchday or '—' }} · {{ f.season }}</div>
-                    </td>
+        <!-- Emit machine-readable UTC; JS localizes text -->
+        <td class="kickoff" data-utc="{{ f.kickoff_utc|utc_iso }}">
+          <span class="muted">
+            {{ f.kickoff_utc.split('T')[0] }} {{ f.kickoff_utc[11:16] }} UTC
+          </span>
+        </td>
 
-                    <td>
-                      {% if f.is_open_for_prediction() %}
-                        <div class="d-inline-flex flex-wrap gap-3 mb-0">
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio" name="fixture_{{ f.id }}" id="p1-{{ f.id }}" value="1"
-                                   {% if myp and myp.selection == '1' %}checked{% endif %}>
-                            <label class="form-check-label" for="p1-{{ f.id }}">1</label>
-                          </div>
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio" name="fixture_{{ f.id }}" id="px-{{ f.id }}" value="X"
-                                   {% if myp and myp.selection == 'X' %}checked{% endif %}>
-                            <label class="form-check-label" for="px-{{ f.id }}">X</label>
-                          </div>
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio" name="fixture_{{ f.id }}" id="p2-{{ f.id }}" value="2"
-                                   {% if myp and myp.selection == '2' %}checked{% endif %}>
-                            <label class="form-check-label" for="p2-{{ f.id }}">2</label>
-                          </div>
-                        </div>
-                      {% else %}
-                        {% if myp %}
-                          <span class="badge text-bg-secondary">Locked: {{ myp.selection }}</span>
-                        {% else %}
-                          <span class="badge text-bg-secondary">Locked</span>
-                        {% endif %}
-                      {% endif %}
-                    </td>
+        <td class="status">
+          {% if f.status == 'UPCOMING' %}
+            <span class="badge b-upcoming">UPCOMING</span>
+          {% elif f.status == 'LIVE' %}
+            <span class="badge b-live">LIVE</span>
+          {% elif f.status == 'FT' %}
+            <span class="badge b-ft">FT</span>
+          {% else %}
+            <span class="badge">{{ f.status }}</span>
+          {% endif %}
+        </td>
 
-                    <td>
-                      {% if f.status in ['IN_PLAY', 'PAUSED'] %}
-                        <span class="badge text-bg-warning text-dark">LIVE</span>
-                        {% if f.home_score is not none and f.away_score is not none %}
-                          <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
-                        {% endif %}
-                      {% elif f.status == 'FINISHED' %}
-                        <span class="badge text-bg-success">FT</span>
-                        <div class="mt-1 fw-semibold">{{ f.home_score }} — {{ f.away_score }}</div>
-                      {% else %}
-                        <span class="badge text-bg-light text-secondary">{{ f.status }}</span>
-                      {% endif %}
-                    </td>
+        <td class="nowrap score">
+          {% if f.home_score is not none and f.away_score is not none %}
+            {{ f.home_score }}–{{ f.away_score }}
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 
-                    <td>
-                      {% set show_preds_now = (not f.is_open_for_prediction()) %}
-                      {% if not show_preds_now %}
-                        <span class="text-secondary">Hidden until kickoff</span>
-                      {% else %}
-                        {% set plist = all_preds.get(f.id, []) %}
-                        {% if not plist %}
-                          <span class="text-secondary">No predictions</span>
-                        {% else %}
-                          <div class="small">
-                            {% for uname, sel in plist %}
-                              <span class="badge rounded-pill text-bg-dark me-1 mb-1">{{ uname }}: {{ sel }}</span>
-                            {% endfor %}
-                          </div>
-                        {% endif %}
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colspan="5" class="text-end p-3">
-                    <button type="submit" class="btn btn-primary">Save All Predictions</button>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </form>
-      </div>
-    </div>
-  {% endif %}
-
-  <!-- Client-side time localization -->
   <script>
+    // Localize kickoff cells for each viewer
     (function () {
-      const opts = {
+      var opts = {
         weekday: 'short',
         month: 'short',
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit'
       };
-      document.querySelectorAll('time.kickoff').forEach(function (el) {
-        const iso = el.getAttribute('datetime');
-        if (!iso) return;
-        const dt = new Date(iso);
-        if (isNaN(dt.getTime())) return;
-        // Replace the visible text with the user's local time string
-        el.textContent = new Intl.DateTimeFormat(undefined, opts).format(dt);
-        // Optional: preserve the original ISO in title tooltip
-        el.title = dt.toString();
-      });
+      function localizeTimes() {
+        var cells = document.querySelectorAll('.kickoff[data-utc]');
+        cells.forEach(function(td) {
+          var iso = td.getAttribute('data-utc');
+          if (!iso) return;
+          var d = new Date(iso);
+          if (isNaN(d.getTime())) return;
+          td.textContent = new Intl.DateTimeFormat(undefined, opts).format(d);
+          td.title = iso + ' (UTC instant)';
+        });
+      }
+      localizeTimes();
+
+      // Optional: auto-refresh status/score every 30s
+      async function refreshFixtures() {
+        try {
+          const res = await fetch('/api/fixtures', { cache: 'no-store' });
+          if (!res.ok) return;
+          const payload = await res.json();
+          const byId = {};
+          payload.fixtures.forEach(f => { byId[String(f.id)] = f; });
+
+          document.querySelectorAll('#fx-table tbody tr[data-id]').forEach(tr => {
+            const id = tr.getAttribute('data-id');
+            const f = byId[id];
+            if (!f) return;
+
+            // kickoff
+            const kd = tr.querySelector('.kickoff');
+            if (kd && kd.getAttribute('data-utc') !== f.kickoff_utc) {
+              kd.setAttribute('data-utc', f.kickoff_utc);
+            }
+
+            // status
+            const st = tr.querySelector('.status .badge');
+            if (st && st.textContent !== f.status) {
+              st.textContent = f.status;
+              st.className = 'badge ' + (
+                f.status === 'UPCOMING' ? 'b-upcoming' :
+                f.status === 'LIVE'     ? 'b-live' :
+                f.status === 'FT'       ? 'b-ft' : ''
+              );
+            }
+
+            // score
+            const sc = tr.querySelector('.score');
+            if (sc) {
+              if (f.home_score != null && f.away_score != null) {
+                const newText = `${f.home_score}–${f.away_score}`;
+                if (sc.textContent.trim() !== newText) sc.textContent = newText;
+              } else {
+                sc.innerHTML = '<span class="muted">—</span>';
+              }
+            }
+          });
+
+          localizeTimes();
+        } catch (e) {
+          // ignore network hiccups
+        }
+      }
+
+      setInterval(refreshFixtures, 30000);
     })();
   </script>
-{% endblock %}
+</body>
+</html>
