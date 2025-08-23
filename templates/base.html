@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{% block title %}Serie A Predictor{% endblock %}</title>
+
+  <!-- Inter font + main stylesheet -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+  <!-- Optional favicons (add files to /static to remove 404s) -->
+  <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='apple-touch-icon.png') }}">
+
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <!-- Top nav -->
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="{{ url_for('index') }}">⚽ Serie A Predictor</a>
+      <nav class="nav-links">
+        <a href="{{ url_for('index') }}" class="{% if request.endpoint=='index' %}active{% endif %}">Fixtures</a>
+        <a href="{{ url_for('leaderboard') }}" class="{% if request.endpoint=='leaderboard' %}active{% endif %}">Leaderboard</a>
+        {% if current_user.is_authenticated and current_user.is_admin %}
+          <a href="{{ url_for('admin') }}" class="{% if request.endpoint in ['admin','admin_users','admin_edit_user'] %}active{% endif %}">Admin</a>
+        {% endif %}
+        {% if current_user.is_authenticated %}
+          <span class="user-chip">Hi, {{ current_user.username }}</span>
+          <a class="btn btn-outline small" href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+          <a class="btn btn-primary small" href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  <!-- Flash messages -->
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-stack">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <span>Made with ❤️ for Calcio • Auto-updates adaptively</span>
+    </div>
+  </footer>
+
+  {% block scripts %}
+  <script>
+    // Click-to-sort for any table with data-sortable, on <th data-sort>
+    document.querySelectorAll("table[data-sortable] th[data-sort]").forEach(th => {
+      th.addEventListener("click", () => {
+        const table = th.closest("table");
+        const tbody = table.querySelector("tbody");
+        const idx = Array.from(th.parentNode.children).indexOf(th);
+        const dir = th.dataset.dir = (th.dataset.dir === "asc" ? "desc" : "asc");
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        rows.sort((a,b) => {
+          const A = a.children[idx].dataset.sortValue ?? a.children[idx].innerText.trim();
+          const B = b.children[idx].dataset.sortValue ?? b.children[idx].innerText.trim();
+          const nA = parseFloat(A), nB = parseFloat(B);
+          const vA = isNaN(nA) ? A.toLowerCase() : nA;
+          const vB = isNaN(nB) ? B.toLowerCase() : nB;
+          if (vA < vB) return dir === "asc" ? -1 : 1;
+          if (vA > vB) return dir === "asc" ? 1 : -1;
+          return 0;
+        });
+        rows.forEach(r => tbody.appendChild(r));
+      });
+    });
+
+    // Kickoff countdowns: any element with [data-kickoff-iso]
+    function tickCountdowns() {
+      document.querySelectorAll("[data-kickoff-iso]").forEach(el => {
+        const iso = el.getAttribute("data-kickoff-iso");
+        if (!iso) return;
+        const kickoff = new Date(iso);
+        const now = new Date();
+        const diff = kickoff - now;
+        const isLocked = diff <= 0;
+        const wrap = el.closest("tr")?.querySelector(".pick-wrap");
+        if (isLocked) {
+          el.textContent = "Locked";
+          if (wrap) wrap.classList.add("locked");
+          return;
+        }
+        const mins = Math.floor(diff / 60000);
+        const hrs = Math.floor(mins / 60);
+        const remM = mins % 60;
+        el.textContent = hrs > 0 ? `${hrs}h ${remM}m` : `${remM}m`;
+      });
+    }
+    tickCountdowns();
+    setInterval(tickCountdowns, 30000);
+  </script>
+  {% endblock %}
+</body>
+</html>
