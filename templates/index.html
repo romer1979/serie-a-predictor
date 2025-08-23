@@ -1,148 +1,147 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Serie A Fixtures</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 24px; }
-    h1 { margin: 0 0 8px; }
-    .note { color: #555; margin: 0 0 24px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px 8px; border-bottom: 1px solid #eee; text-align: left; white-space: nowrap; }
-    th.status, td.status { text-align: center; }
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
-    .b-upcoming { background: #eef6ff; color: #155fa0; }
-    .b-live     { background: #fff4d6; color: #79520a; }
-    .b-ft       { background: #eaf7ea; color: #246b2f; }
-    .muted { color: #777; }
-    .nowrap { white-space: nowrap; }
-  </style>
-</head>
-<body>
-  <h1>Serie A Fixtures</h1>
-  <p class="note">Kickoff is shown in <strong>your local time</strong>. Source times are in Italy local time.</p>
+{% extends 'layout.html' %}
+{% block title %}Fixtures & Predictions{% endblock %}
 
-  <table id="fx-table">
+{% block content %}
+<h1>Upcoming & Live Fixtures</h1>
+
+<p class="hint">
+  Kickoff times are shown in your local time. Live games stay visible and update points provisionally.
+</p>
+
+<form method="post" action="{{ url_for('save_all_predictions') }}">
+  <table class="fixtures">
     <thead>
       <tr>
+        <th>When</th>
         <th>Match</th>
-        <th>Kickoff (local)</th>
-        <th class="status">Status</th>
-        <th class="nowrap">Score</th>
+        <th>Status</th>
+        <th>Score</th>
+        <th>Your Pick</th>
+        {% if users_cols %}
+          <th class="pred-matrix">All Picks{% if users_cols %} ({{ users_cols|length }}){% endif %}</th>
+        {% endif %}
       </tr>
     </thead>
     <tbody>
       {% for f in fixtures %}
-      <tr data-id="{{ f.id }}">
-        <td>{{ f.home }} vs {{ f.away }}</td>
-
-        <!-- Emit machine-readable UTC; JS localizes text -->
-        <td class="kickoff" data-utc="{{ f.kickoff_utc|utc_iso }}">
-          <span class="muted">
-            {{ f.kickoff_utc.split('T')[0] }} {{ f.kickoff_utc[11:16] }} UTC
-          </span>
+      <tr class="
+        {% if f.status in ('IN_PLAY','PAUSED') %}live{% elif f.status == 'FINISHED' %}finished{% else %}upcoming{% endif %}
+      ">
+        <td>
+          <!-- Store UTC in attribute; show local via JS -->
+          <time class="kickoff" data-utc="{{ f.match_date|utc_iso }}">
+            {{ f.match_date|utc_iso }}
+          </time>
         </td>
 
+        <td class="match">{{ f.home_team }} vs {{ f.away_team }}</td>
+
         <td class="status">
-          {% if f.status == 'UPCOMING' %}
-            <span class="badge b-upcoming">UPCOMING</span>
-          {% elif f.status == 'LIVE' %}
-            <span class="badge b-live">LIVE</span>
-          {% elif f.status == 'FT' %}
-            <span class="badge b-ft">FT</span>
+          {% if f.status in ('IN_PLAY','PAUSED') %}
+            <span class="badge live">LIVE</span>
+          {% elif f.status == 'FINISHED' %}
+            <span class="badge finished">FT</span>
+          {% elif f.status in ('SCHEDULED','TIMED') %}
+            <span class="badge scheduled">Upcoming</span>
           {% else %}
             <span class="badge">{{ f.status }}</span>
           {% endif %}
         </td>
 
-        <td class="nowrap score">
+        <td class="score">
           {% if f.home_score is not none and f.away_score is not none %}
-            {{ f.home_score }}–{{ f.away_score }}
+            <strong>{{ f.home_score }}&nbsp;–&nbsp;{{ f.away_score }}</strong>
+            {% if provisional_flags.get(f.id) %}
+              <small class="provisional">(provisional)</small>
+            {% endif %}
           {% else %}
-            <span class="muted">—</span>
+            <span class="muted">–</span>
           {% endif %}
         </td>
+
+        <td class="your-pick">
+          {% if f.is_open_for_prediction() %}
+            {% set current = (user_predictions.get(f.id).selection if user_predictions.get(f.id) else None) %}
+            <label><input type="radio" name="fixture_{{ f.id }}" value="1" {% if current == '1' %}checked{% endif %}> 1</label>
+            <label><input type="radio" name="fixture_{{ f.id }}" value="X" {% if current == 'X' %}checked{% endif %}> X</label>
+            <label><input type="radio" name="fixture_{{ f.id }}" value="2" {% if current == '2' %}checked{% endif %}> 2</label>
+          {% else %}
+            {% set p = user_predictions.get(f.id) %}
+            {% if p %}
+              <strong>{{ p.selection }}</strong>
+              {% if p.points_awarded is not none %}
+                <small class="{{ 'pts-win' if p.points_awarded==1 else 'pts-lose' }}">
+                  ({{ p.points_awarded }} pt{{ '' if p.points_awarded==1 else 's' }})
+                  {% if provisional_flags.get(f.id) %}<em> provisional</em>{% endif %}
+                </small>
+              {% endif %}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          {% endif %}
+        </td>
+
+        {% if users_cols %}
+          <td class="pred-matrix">
+            {% if show_preds_flags.get(f.id) %}
+              <div class="grid">
+                {% for uid, uname in users_cols %}
+                  <div class="cell" title="{{ uname }}">
+                    {{ pred_matrix.get((f.id, uid)) or '·' }}
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <span class="muted">Hidden until kickoff</span>
+            {% endif %}
+          </td>
+        {% endif %}
       </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <script>
-    // Localize kickoff cells for each viewer
-    (function () {
-      var opts = {
-        weekday: 'short',
-        month: 'short',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      };
-      function localizeTimes() {
-        var cells = document.querySelectorAll('.kickoff[data-utc]');
-        cells.forEach(function(td) {
-          var iso = td.getAttribute('data-utc');
-          if (!iso) return;
-          var d = new Date(iso);
-          if (isNaN(d.getTime())) return;
-          td.textContent = new Intl.DateTimeFormat(undefined, opts).format(d);
-          td.title = iso + ' (UTC instant)';
-        });
-      }
-      localizeTimes();
+  <div class="actions">
+    <button type="submit">Save all picks</button>
+  </div>
+</form>
 
-      // Optional: auto-refresh status/score every 30s
-      async function refreshFixtures() {
-        try {
-          const res = await fetch('/api/fixtures', { cache: 'no-store' });
-          if (!res.ok) return;
-          const payload = await res.json();
-          const byId = {};
-          payload.fixtures.forEach(f => { byId[String(f.id)] = f; });
+<style>
+  .fixtures { width: 100%; border-collapse: collapse; }
+  .fixtures th, .fixtures td { border-bottom: 1px solid #eee; padding: 8px; vertical-align: middle; }
+  .badge { padding: 2px 6px; border-radius: 6px; font-size: 12px; }
+  .badge.live { background: #ffe6e6; color: #c40000; font-weight: 700; }
+  .badge.finished { background: #e6ffe6; color: #006600; }
+  .badge.scheduled { background: #e6f0ff; color: #0033aa; }
+  .muted { color: #888; }
+  .provisional { color: #c40000; }
+  .pred-matrix .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(20px, 1fr)); gap: 2px; }
+  .pred-matrix .cell { text-align: center; font-family: monospace; border: 1px solid #f0f0f0; border-radius: 4px; padding: 2px 0; }
+  tr.live { background: #fffaf6; }
+  tr.finished { background: #fafafa; }
+  .actions { margin-top: 12px; }
+  .pts-win { color: #0a7a0a; }
+  .pts-lose { color: #a00; }
+</style>
 
-          document.querySelectorAll('#fx-table tbody tr[data-id]').forEach(tr => {
-            const id = tr.getAttribute('data-id');
-            const f = byId[id];
-            if (!f) return;
-
-            // kickoff
-            const kd = tr.querySelector('.kickoff');
-            if (kd && kd.getAttribute('data-utc') !== f.kickoff_utc) {
-              kd.setAttribute('data-utc', f.kickoff_utc);
-            }
-
-            // status
-            const st = tr.querySelector('.status .badge');
-            if (st && st.textContent !== f.status) {
-              st.textContent = f.status;
-              st.className = 'badge ' + (
-                f.status === 'UPCOMING' ? 'b-upcoming' :
-                f.status === 'LIVE'     ? 'b-live' :
-                f.status === 'FT'       ? 'b-ft' : ''
-              );
-            }
-
-            // score
-            const sc = tr.querySelector('.score');
-            if (sc) {
-              if (f.home_score != null && f.away_score != null) {
-                const newText = `${f.home_score}–${f.away_score}`;
-                if (sc.textContent.trim() !== newText) sc.textContent = newText;
-              } else {
-                sc.innerHTML = '<span class="muted">—</span>';
-              }
-            }
-          });
-
-          localizeTimes();
-        } catch (e) {
-          // ignore network hiccups
-        }
-      }
-
-      setInterval(refreshFixtures, 30000);
-    })();
-  </script>
-</body>
-</html>
+<script>
+  // Convert UTC times to the viewer's local time and refresh periodically
+  function renderLocalTimes() {
+    document.querySelectorAll('time.kickoff').forEach(el => {
+      const isoUtc = el.getAttribute('data-utc');
+      if (!isoUtc) return;
+      const d = new Date(isoUtc);
+      if (isNaN(d.getTime())) return;
+      // Show like "Sat, Aug 23 • 3:00 PM"
+      el.textContent = d.toLocaleString(undefined, {
+        weekday: 'short', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit'
+      });
+      el.setAttribute('title', d.toString());
+    });
+  }
+  renderLocalTimes();
+  // In case the page stays open across DST/time changes, re-render occasionally
+  setInterval(renderLocalTimes, 60_000);
+</script>
+{% endblock %}
