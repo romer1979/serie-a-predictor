@@ -1,135 +1,136 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Serie A Predictor</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    .live { background: #fff4e5; }
-    .status-badge { font-size: 12px; padding: 2px 6px; border-radius: 4px; }
-    .status-live { background: #ffecb3; border: 1px solid #ffb300; }
-    .status-finished { background: #e0f2f1; border: 1px solid #26a69a; }
-    .status-scheduled { background: #e3f2fd; border: 1px solid #64b5f6; }
-    .score { font-weight: 600; }
-    .kickoff small { color: #666; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Upcoming & Live Fixtures</h1>
-    <nav>
-      <a href="{{ url_for('leaderboard') }}">Leaderboard</a>
-      <a href="{{ url_for('logout') }}">Logout</a>
-    </nav>
-  </header>
+{% extends "base.html" %}
+{% block title %}Fixtures · Serie A Predictor{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <div class="panel-head">
+    <h1 class="panel-title">Upcoming fixtures</h1>
+    <div class="panel-actions">
+      <form action="{{ url_for('save_all_predictions') }}" method="post">
+        <button class="btn btn-primary">Save all picks</button>
+      </form>
+      {% if current_user.is_admin %}
+      <form action="{{ url_for('admin_refresh') }}" method="post">
+        <button class="btn btn-outline">Refresh fixtures</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
 
   {% if fixtures %}
-  <form method="post" action="{{ url_for('save_all_predictions') }}">
-    <table>
+  <div class="table-wrap">
+    <table class="data-table" data-sortable>
       <thead>
         <tr>
-          <th>Kickoff (your time)</th>
-          <th>Fixture</th>
-          <th>Status / Score</th>
-          <th>Your Pick</th>
-          {% if users_cols %}
-            <th>All Picks (revealed at kickoff)</th>
-          {% endif %}
+          <th class="sm" data-sort>MD</th>
+          <th data-sort>Fixture</th>
+          <th class="md" data-sort>Date / Time (ET)</th>
+          <th class="sm" data-sort>Status</th>
+          <th class="sm center" data-sort>Score</th>
+          <th class="lg center">Your Pick</th>
+          <th class="lg">All Picks (revealed after kickoff)</th>
         </tr>
       </thead>
       <tbody>
         {% for f in fixtures %}
-        <tr class="{% if live_flags.get(f.id) %}live{% endif %}">
-          <td class="kickoff" data-utc="{{ f.match_date|utc_iso }}">
-            <div class="local"></div>
-            <small class="utc">(<span class="utc-text"></span> UTC)</small>
-          </td>
-          <td>
-            <div><strong>{{ f.home_team }}</strong> vs <strong>{{ f.away_team }}</strong></div>
-            <div>Matchday {{ f.matchday or "—" }}</div>
-          </td>
-          <td>
-            {% if f.status in ("IN_PLAY","PAUSED") %}
-              <span class="status-badge status-live">{{ f.status.replace('_', ' ') }}</span>
-              <div class="score">{{ f.home_score if f.home_score is not none else "-" }} &ndash; {{ f.away_score if f.away_score is not none else "-" }}</div>
-            {% elif f.status == "FINISHED" %}
-              <span class="status-badge status-finished">Finished</span>
-              <div class="score">{{ f.home_score if f.home_score is not none else "-" }} &ndash; {{ f.away_score if f.away_score is not none else "-" }}</div>
-            {% else %}
-              <span class="status-badge status-scheduled">{{ f.status }}</span>
-            {% endif %}
-          </td>
-          <td>
-            {% set open = f.is_open_for_prediction() %}
-            {% if open %}
-              {% set existing = user_predictions.get(f.id) %}
-              <select name="fixture_{{ f.id }}">
-                <option value="" {% if not existing %}selected{% endif %} disabled>Pick…</option>
-                <option value="1" {% if existing and existing.selection == "1" %}selected{% endif %}>1 (Home)</option>
-                <option value="X" {% if existing and existing.selection == "X" %}selected{% endif %}>X (Draw)</option>
-                <option value="2" {% if existing and existing.selection == "2" %}selected{% endif %}>2 (Away)</option>
-              </select>
-            {% else %}
-              {% set existing = user_predictions.get(f.id) %}
-              {% if existing %}<strong>{{ existing.selection }}</strong>{% else %}<em>—</em>{% endif %}
-            {% endif %}
-          </td>
+          {% set kickoff_iso = f.match_date.isoformat() %}
+          {% set is_open = f.is_open_for_prediction() %}
+          <tr>
+            <td class="muted sm" data-sort-value="{{ f.matchday or '' }}">{{ f.matchday or '—' }}</td>
 
-          {% if users_cols %}
-          <td>
-            {% if show_preds_flags.get(f.id) %}
-              <ul style="margin:0; padding-left: 16px;">
-                {% for uid, uname in users_cols %}
-                  <li>
-                    <strong>{{ uname }}</strong>:
-                    {{ pred_matrix.get((f.id, uid)) or "—" }}
-                  </li>
-                {% endfor %}
-              </ul>
-            {% else %}
-              <em>Hidden until kickoff</em>
-            {% endif %}
-          </td>
-          {% endif %}
-        </tr>
+            <td>
+              <div class="teams">
+                <span class="team">{{ f.home_team }}</span>
+                <span class="vs">vs</span>
+                <span class="team">{{ f.away_team }}</span>
+              </div>
+            </td>
+
+            <td class="md" data-sort-value="{{ f.match_date.timestamp() }}">
+              <div class="when">
+                <div class="date">{{ f.match_date.strftime('%a, %b %d') }}</div>
+                <div class="time">{{ f.match_date.strftime('%H:%M') }} <span class="tz">ET</span></div>
+                <div class="countdown">
+                  <span class="badge" data-kickoff-iso="{{ kickoff_iso }}">—</span>
+                </div>
+              </div>
+            </td>
+
+            <td class="sm">
+              {% if f.status in ['IN_PLAY','PAUSED'] %}
+                <span class="chip live">LIVE</span>
+              {% elif f.status == 'FINISHED' %}
+                <span class="chip finished">FINISHED</span>
+              {% else %}
+                <span class="chip scheduled">SCHEDULED</span>
+              {% endif %}
+            </td>
+
+            <td class="sm center">
+              {% if f.home_score is not none and f.away_score is not none %}
+                <strong>{{ f.home_score }}–{{ f.away_score }}</strong>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+
+            <td class="lg center">
+              <div class="pick-wrap {% if not is_open %}locked{% endif %}">
+                <label class="pick">
+                  <input type="radio" name="fixture_{{ f.id }}" form="bulkForm" value="1"
+                    {% if user_predictions.get(f.id) and user_predictions.get(f.id).selection == '1' %}checked{% endif %}
+                    {% if not is_open %}disabled{% endif %}>
+                  <span>1</span>
+                  <small>{{ f.home_team }}</small>
+                </label>
+                <label class="pick">
+                  <input type="radio" name="fixture_{{ f.id }}" form="bulkForm" value="X"
+                    {% if user_predictions.get(f.id) and user_predictions.get(f.id).selection == 'X' %}checked{% endif %}
+                    {% if not is_open %}disabled{% endif %}>
+                  <span>X</span>
+                  <small>Draw</small>
+                </label>
+                <label class="pick">
+                  <input type="radio" name="fixture_{{ f.id }}" form="bulkForm" value="2"
+                    {% if user_predictions.get(f.id) and user_predictions.get(f.id).selection == '2' %}checked{% endif %}
+                    {% if not is_open %}disabled{% endif %}>
+                  <span>2</span>
+                  <small>{{ f.away_team }}</small>
+                </label>
+              </div>
+            </td>
+
+            <td>
+              {% if is_open %}
+                <span class="muted">Hidden until kickoff</span>
+              {% else %}
+                {% set preds = all_preds.get(f.id, []) %}
+                {% if preds %}
+                  <div class="all-picks">
+                    {% for uname, sel in preds %}
+                      <span class="pill" title="{{ uname }}">{{ sel }}</span>
+                    {% endfor %}
+                  </div>
+                {% else %}
+                  <span class="muted">No picks yet</span>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
 
-    <p style="margin-top: 12px;">
-      <button type="submit">Save all open picks</button>
-    </p>
+  <form id="bulkForm" method="post" action="{{ url_for('save_all_predictions') }}" class="bulk-save">
+    <button class="btn btn-primary">Save all selected picks</button>
   </form>
   {% else %}
-    <p>No fixtures to show yet.</p>
+    <div class="empty-state">
+      <h2>No upcoming fixtures yet</h2>
+      <p>Check back soon. We’ll pull new fixtures automatically.</p>
+    </div>
   {% endif %}
+</section>
 
-  <script>
-    // Convert UTC ISO string in data-utc -> human local time
-    function fmt(dt) {
-      // e.g. "Sat, 23 Aug 2025 20:45"
-      return dt.toLocaleString(undefined, {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false
-      });
-    }
-    document.querySelectorAll('.kickoff').forEach(cell => {
-      const iso = cell.getAttribute('data-utc');
-      if (!iso) return;
-      const d = new Date(iso); // parsed as UTC by ISO "Z"
-      const localDiv = cell.querySelector('.local');
-      const utcText = cell.querySelector('.utc-text');
-      if (localDiv) localDiv.textContent = fmt(d);
-      if (utcText) utcText.textContent = d.toISOString().slice(11, 16); // HH:MM UTC
-    });
-  </script>
-</body>
-</html>
+{% endblock %}
