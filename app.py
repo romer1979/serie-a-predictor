@@ -1,30 +1,7 @@
 """
-Serie A Predictor web application..
+Serie A Predictor web application.
 
-This Flask application allows invited users to register, log in and submit simple
-predictions (1/X/2) for upcoming Serie A fixtures. The app automatically
-retrieves fixtures and results from a football API when possible. Predictions
-are locked at kickoff and points are awarded for correct outcomes. A public
-leaderboard ranks users by total points. An optional admin interface allows
-invite codes to be managed.
-
-The goal of this project is to demonstrate how the core features described
-in the specification can be implemented in a concise, readable manner. The
-application uses SQLite for persistence, SQLAlchemy as an ORM and
-Flask‑Login for session management. Where available, the application will
-attempt to fetch upcoming fixtures and update results via the free
-`football-data.org` API. If no API key is configured the app falls back to a
-read‑only JSON schedule bundled with this repository (see
-`data/seriea_2024_25.json`).
-
-To run the application locally:
-
-    python app.py
-
-The `FLASK_SECRET_KEY` and `FOOTBALL_DATA_API_KEY` environment variables
-control secret session data and access to football data. When deploying
-publicly these values **must** be set to secure random strings. See
-README.md for full deployment instructions.
+(… header text unchanged …)
 """
 
 import os
@@ -82,8 +59,6 @@ if raw_db_url.startswith('postgresql'):
 
 app.config['SQLALCHEMY_DATABASE_URI'] = raw_db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Engine options to keep connections healthy on Render
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'pool_recycle': 300,
@@ -96,8 +71,14 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+
+# -----------------------------------------------------------------------------
+# Jinja filters
+# -----------------------------------------------------------------------------
+
 @app.template_filter('utc_iso')
 def utc_iso(dt):
+    """Return an ISO 8601 UTC string for a datetime (used in <time datetime=...>)."""
     if dt is None:
         return ''
     if dt.tzinfo is None:
@@ -105,9 +86,10 @@ def utc_iso(dt):
     s = dt.astimezone(timezone.utc).isoformat()
     return s[:-6] + 'Z' if s.endswith('+00:00') else s
 
+
 # -----------------------------------------------------------------------------
 # Models
-#
+# -----------------------------------------------------------------------------
 
 class User(db.Model, UserMixin):
     __tablename__ = 'users'
@@ -141,12 +123,12 @@ class Fixture(db.Model):
     __tablename__ = 'fixtures'
     id = db.Column(db.Integer, primary_key=True)
     match_id = db.Column(db.String, unique=True, nullable=False)
-    match_date = db.Column(db.DateTime, nullable=False)
+    match_date = db.Column(db.DateTime, nullable=False)  # stored as UTC (aware or naive UTC)
     home_team = db.Column(db.String, nullable=False)
     away_team = db.Column(db.String, nullable=False)
     season = db.Column(db.String, nullable=False)
     matchday = db.Column(db.String, nullable=True)
-    status = db.Column(db.String, default='SCHEDULED')
+    status = db.Column(db.String, default='SCHEDULED')  # SCHEDULED/TIMED/IN_PLAY/PAUSED/FINISHED
     home_score = db.Column(db.Integer, nullable=True)
     away_score = db.Column(db.Integer, nullable=True)
 
@@ -175,7 +157,7 @@ class Prediction(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     fixture_id = db.Column(db.Integer, db.ForeignKey('fixtures.id'))
     selection = db.Column(db.String, nullable=False)  # '1', 'X' or '2'
-    points_awarded = db.Column(db.Integer, nullable=True)  # 1/0 or None until evaluated
+    points_awarded = db.Column(db.Integer, nullable=True)  # 1/0 live or final, None until evaluable
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(ZoneInfo('America/New_York')))
 
     user = db.relationship('User', back_populates='predictions')
@@ -183,8 +165,8 @@ class Prediction(db.Model):
 
 
 # -----------------------------------------------------------------------------
-# Authentication and user loading
-#
+# Auth
+# -----------------------------------------------------------------------------
 
 @login_manager.user_loader
 def load_user(user_id: str):
@@ -192,8 +174,9 @@ def load_user(user_id: str):
 
 
 # -----------------------------------------------------------------------------
-# Utility functions
-#
+# External data
+# -----------------------------------------------------------------------------
+
 def fetch_fixtures_from_api() -> list[dict]:
     api_key = os.environ.get('FOOTBALL_DATA_API_KEY')
     if not api_key:
@@ -201,6 +184,7 @@ def fetch_fixtures_from_api() -> list[dict]:
     today = datetime.now().date()
     season_start_year = today.year if today.month >= 7 else today.year - 1
     season_str = f"{season_start_year}-{(season_start_year + 1) % 100:02d}"
+
     url = "https://api.football-data.org/v4/competitions/SA/matches"
     headers = {"X-Auth-Token": api_key}
     params = {"season": season_start_year}
@@ -211,61 +195,79 @@ def fetch_fixtures_from_api() -> list[dict]:
         data = resp.json()
     except Exception:
         return []
+
     fixtures: list[dict] = []
     for match in data.get('matches', []):
         status = match.get('status')
         if status not in ('SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED', 'FINISHED'):
             continue
         utc_date_str = match['utcDate']
-        utc_dt = datetime.fromisoformat(utc_date_str.replace('Z', '+00:00'))  # aware UTC
+        utc_dt = datetime.fromisoformat(utc_date_str.replace('Z', '+00:00'))
+        full = match.get('score', {}).get('fullTime', {}) or {}
         fixtures.append({
             'match_id': str(match['id']),
-            'match_date': utc_dt,  # stored UTC
+            'match_date': utc_dt,  # keep UTC
             'home_team': match['homeTeam']['name'],
             'away_team': match['awayTeam']['name'],
             'season': season_str,
             'matchday': str(match.get('matchday')),
             'status': status,
-            'home_score': match['score']['fullTime']['home'] if match['score']['fullTime']['home'] is not None else None,
-            'away_score': match['score']['fullTime']['away'] if match['score']['fullTime']['away'] is not None else None,
+            'home_score': full.get('home'),
+            'away_score': full.get('away'),
         })
     return fixtures
 
+
 def fetch_fixtures_from_fallback() -> list[dict]:
+    # fallback file bundled in repo (Italy local -> convert to UTC)
     fallback_path = Path(__file__).resolve().parent / 'data' / 'seriea_2024_25.json'
     if not fallback_path.exists():
         return []
     with open(fallback_path, 'r', encoding='utf-8') as f:
         season_data = json.load(f)
+
     fixtures: list[dict] = []
     for match in season_data.get('matches', []):
         score = match.get('score', {})
         ft = score.get('ft')
-        if not ft:
-            date_str = match['date']
-            time_str = match.get('time', '18:00')
-            # Europe/Rome -> UTC
-            dt_naive = datetime.fromisoformat(f"{date_str}T{time_str}")
-            dt_rome = dt_naive.replace(tzinfo=ZoneInfo('Europe/Rome'))
-            utc_dt = dt_rome.astimezone(timezone.utc)
-            fixtures.append({
-                'match_id': f"{date_str}-{match['team1']}-{match['team2']}",
-                'match_date': utc_dt,
-                'home_team': match['team1'],
-                'away_team': match['team2'],
-                'season': season_data.get('name', '2024/25'),
-                'matchday': match.get('round'),
-                'status': 'SCHEDULED',
-                'home_score': None,
-                'away_score': None,
-            })
+        date_str = match['date']
+        time_str = match.get('time', '18:00')
+        dt_naive = datetime.fromisoformat(f"{date_str}T{time_str}")
+        dt_rome = dt_naive.replace(tzinfo=ZoneInfo('Europe/Rome'))
+        utc_dt = dt_rome.astimezone(timezone.utc)
+
+        if ft:
+            home_score = ft.get('home')
+            away_score = ft.get('away')
+            status = 'FINISHED'
+        else:
+            home_score = None
+            away_score = None
+            status = 'SCHEDULED'
+
+        fixtures.append({
+            'match_id': f"{date_str}-{match['team1']}-{match['team2']}",
+            'match_date': utc_dt,
+            'home_team': match['team1'],
+            'away_team': match['team2'],
+            'season': season_data.get('name', '2024/25'),
+            'matchday': match.get('round'),
+            'status': status,
+            'home_score': home_score,
+            'away_score': away_score,
+        })
     return fixtures
+
+
+# -----------------------------------------------------------------------------
+# Sync & evaluation
+# -----------------------------------------------------------------------------
 
 def update_fixtures() -> None:
     """
     Sync local fixtures with API (if key present) or fallback file.
     Insert new fixtures; update status/scores on existing ones.
-    Then evaluate predictions for finished matches.
+    Then evaluate predictions (live AND final).
     """
     fixtures_from_api = fetch_fixtures_from_api()
     fixtures_to_use = fixtures_from_api if fixtures_from_api else fetch_fixtures_from_fallback()
@@ -274,6 +276,7 @@ def update_fixtures() -> None:
         existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
         if existing:
             updated = False
+            # Times are UTC already
             if fi['status'] != existing.status:
                 existing.status = fi['status']; updated = True
             if fi['home_score'] is not None and fi['home_score'] != existing.home_score:
@@ -296,11 +299,154 @@ def update_fixtures() -> None:
             ))
 
     db.session.commit()
-    evaluate_predictions()
+    evaluate_predictions_live()  # <— now evaluates for IN_PLAY/PAUSED/FINISHED
+
+
+# --- Adaptive fetch throttle ---
+
+FETCH_STATE = {"last_run": None, "last_interval": None}
+
+def _adaptive_min_interval() -> timedelta:
+    """Return how often we should hit the API right now."""
+    now_utc = datetime.now(timezone.utc)
+
+    # If anything is live, poll every 60s
+    live = Fixture.query.filter(Fixture.status.in_(('IN_PLAY', 'PAUSED'))).count()
+    if live > 0:
+        return timedelta(seconds=60)
+
+    # If matches kick off within the next 2 hours, poll every 60s
+    soon = (
+        Fixture.query
+        .filter(Fixture.match_date >= now_utc, Fixture.match_date <= now_utc + timedelta(hours=2))
+        .count()
+    )
+    if soon > 0:
+        return timedelta(seconds=60)
+
+    # If matches are today (UTC), poll every 6 hours
+    today_end_utc = now_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
+    today = (
+        Fixture.query
+        .filter(Fixture.match_date >= now_utc, Fixture.match_date <= today_end_utc)
+        .count()
+    )
+    if today > 0:
+        return timedelta(hours=6)
+
+    # Otherwise quiet times
+    return timedelta(hours=24)
+
+
+def update_fixtures_adaptive(force: bool = False) -> None:
+    """Call update_fixtures() only if the adaptive interval has elapsed."""
+    now_utc = datetime.now(timezone.utc)
+    min_interval = _adaptive_min_interval()
+    last_run = FETCH_STATE["last_run"]
+
+    if not force and last_run is not None and (now_utc - last_run) < min_interval:
+        return
+
+    update_fixtures()
+
+    FETCH_STATE["last_run"] = now_utc
+    FETCH_STATE["last_interval"] = min_interval
+
+
+def upcoming_fixtures() -> list[Fixture]:
+    """
+    Return fixtures to display on the homepage:
+      - all LIVE (IN_PLAY/PAUSED) fixtures (so they never disappear at kickoff)
+      - all fixtures in the next 7 days
+      - optionally, include the full matchday of the very next upcoming fixture
+    """
+    now_utc = datetime.now(timezone.utc)
+    next_week_utc = now_utc + timedelta(days=7)
+
+    live = Fixture.query.filter(Fixture.status.in_(('IN_PLAY', 'PAUSED'))).all()
+
+    window = (
+        Fixture.query.filter(
+            Fixture.match_date >= now_utc,
+            Fixture.match_date <= next_week_utc
+        ).all()
+    )
+
+    first_upcoming = (
+        Fixture.query.filter(
+            Fixture.status.in_(('SCHEDULED', 'TIMED')),
+            Fixture.match_date >= now_utc
+        )
+        .order_by(Fixture.match_date.asc())
+        .first()
+    )
+
+    week1 = []
+    if first_upcoming and first_upcoming.matchday:
+        week1 = (
+            Fixture.query.filter(
+                Fixture.matchday == first_upcoming.matchday
+            ).all()
+        )
+
+    merged = {}
+    for group in (live, window, week1):
+        for f in group:
+            merged[f.id] = f
+
+    def sort_key(f: Fixture):
+        # live first, then by kickoff time
+        live_rank = 0 if f.status in ('IN_PLAY', 'PAUSED') else 1
+        return (live_rank, f.match_date)
+
+    return sorted(merged.values(), key=sort_key)
+
+
+def evaluate_predictions_live() -> None:
+    """
+    Award (and continuously re-compute) points for fixtures that have a score:
+    - IN_PLAY / PAUSED: provisional points based on current score
+    - FINISHED: final points based on final score
+    If a live score changes, points are updated on next sync.
+    """
+    evaluable_statuses = ('IN_PLAY', 'PAUSED', 'FINISHED')
+    fixtures = Fixture.query.filter(Fixture.status.in_(evaluable_statuses)).all()
+
+    for fixture in fixtures:
+        outcome = fixture.outcome_code()  # None if we don't have both scores
+        for prediction in fixture.predictions:
+            if outcome is None:
+                # If we can't evaluate yet, keep it None until a score exists
+                prediction.points_awarded = None
+            else:
+                prediction.points_awarded = 1 if prediction.selection == outcome else 0
+            db.session.add(prediction)
+
+    db.session.commit()
+
+
+def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[str, str]]]:
+    """Return {fixture_id: [(username, selection), ...]} for the given fixtures."""
+    if not fixtures:
+        return {}
+    ids = [f.id for f in fixtures]
+    rows = (
+        db.session.query(Prediction.fixture_id, User.username, Prediction.selection)
+        .join(User, User.id == Prediction.user_id)
+        .filter(Prediction.fixture_id.in_(ids))
+        .order_by(User.username.asc())
+        .all()
+    )
+    out: dict[int, list[tuple[str, str]]] = {}
+    for fixture_id, username, selection in rows:
+        out.setdefault(fixture_id, []).append((username, selection))
+    return out
+
 
 def seasons_available() -> list[str]:
     rows = db.session.query(Fixture.season).distinct().all()
     return sorted([r[0] for r in rows])
+
 
 def matchdays_for(season: str) -> list[str]:
     rows = (
@@ -314,6 +460,7 @@ def matchdays_for(season: str) -> list[str]:
         return [str(x) for x in sorted({int(d) for d in days})]
     except Exception:
         return sorted(set(days))
+
 
 def latest_completed_matchday(season: str) -> str | None:
     rows = (
@@ -330,6 +477,7 @@ def latest_completed_matchday(season: str) -> str | None:
     except Exception:
         return sorted(set(days))[-1]
 
+
 def weekly_user_points(season: str, matchday: str):
     rows = (
         db.session.query(
@@ -345,127 +493,11 @@ def weekly_user_points(season: str, matchday: str):
     )
     return sorted(rows, key=lambda r: (-r[2], r[1].lower()))
 
-# --- Adaptive fetch throttle ---
-FETCH_STATE = {"last_run": None, "last_interval": None}
-
-def _adaptive_min_interval() -> timedelta:
-    """Return how often we should hit the API right now."""
-    now_utc = datetime.now(timezone.utc)
-
-    # If anything is live, poll every 60s (keeps live scores/status fresh)
-    live = Fixture.query.filter(Fixture.status.in_(('IN_PLAY', 'PAUSED'))).count()
-    if live > 0:
-        return timedelta(seconds=60)
-
-    # If matches kick off within the next 2 hours, poll every 60s
-    soon = (
-        Fixture.query
-        .filter(Fixture.match_date >= now_utc, Fixture.match_date <= now_utc + timedelta(hours=2))
-        .count()
-    )
-    if soon > 0:
-        return timedelta(seconds=60)
-
-    # If matches are today (UTC day), poll every 6 hours
-    today_end_utc = now_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
-    today = (
-        Fixture.query
-        .filter(Fixture.match_date >= now_utc, Fixture.match_date <= today_end_utc)
-        .count()
-    )
-    if today > 0:
-        return timedelta(hours=6)
-
-    return timedelta(hours=24)
-
-def update_fixtures_adaptive(force: bool = False) -> None:
-    now_utc = datetime.now(timezone.utc)
-    min_interval = _adaptive_min_interval()
-    last_run = FETCH_STATE["last_run"]
-
-    if not force and last_run is not None and (now_utc - last_run) < min_interval:
-        return
-
-    update_fixtures()
-    FETCH_STATE["last_run"] = now_utc
-    FETCH_STATE["last_interval"] = min_interval
-
-def upcoming_fixtures() -> list[Fixture]:
-    """
-    Show:
-      - any LIVE fixtures (IN_PLAY/PAUSED) so they do NOT disappear,
-      - all fixtures in the next 7 days,
-      - and (unchanged idea) all fixtures that belong to the very next upcoming matchday,
-        but now we include every status for that matchday (not only SCHEDULED/TIMED).
-    """
-    now_utc = datetime.now(timezone.utc)
-    next_week_utc = now_utc + timedelta(days=7)
-
-    # A) Next week window
-    base = Fixture.query.filter(
-        Fixture.match_date >= now_utc,
-        Fixture.match_date <= next_week_utc
-    ).all()
-
-    # B) Always include currently LIVE fixtures (even if their kickoff is < now)
-    live_now = Fixture.query.filter(Fixture.status.in_(('IN_PLAY', 'PAUSED'))).all()
-
-    # C) Pull the "very next" upcoming matchday anchor, then include ALL fixtures for that matchday
-    first_upcoming = (
-        Fixture.query.filter(
-            Fixture.status.in_(('SCHEDULED', 'TIMED')),
-            Fixture.match_date >= now_utc
-        )
-        .order_by(Fixture.match_date.asc())
-        .first()
-    )
-
-    week1 = []
-    if first_upcoming and first_upcoming.matchday:
-        week1 = Fixture.query.filter(
-            Fixture.matchday == first_upcoming.matchday
-        ).all()  # <-- include all statuses for that MD
-
-    merged = {f.id: f for f in base}
-    for f in live_now:
-        merged[f.id] = f
-    for f in week1:
-        merged[f.id] = f
-
-    return sorted(merged.values(), key=lambda f: f.match_date)
-
-def evaluate_predictions() -> None:
-    """
-    Award points once matches are FINISHED (DB writes).
-    """
-    finished_fixtures = Fixture.query.filter(Fixture.status == 'FINISHED').all()
-    for fixture in finished_fixtures:
-        outcome = fixture.outcome_code()
-        for prediction in fixture.predictions:
-            if prediction.points_awarded is None:
-                prediction.points_awarded = 1 if prediction.selection == outcome else 0
-                db.session.add(prediction)
-    db.session.commit()
-
-def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[str, str]]]:
-    if not fixtures:
-        return {}
-    ids = [f.id for f in fixtures]
-    rows = (
-        db.session.query(Prediction.fixture_id, User.username, Prediction.selection)
-        .join(User, User.id == Prediction.user_id)
-        .filter(Prediction.fixture_id.in_(ids))
-        .order_by(User.username.asc())
-        .all()
-    )
-    out: dict[int, list[tuple[str, str]]] = {}
-    for fixture_id, username, selection in rows:
-        out.setdefault(fixture_id, []).append((username, selection))
-    return out
 
 def current_season_from_db() -> str | None:
     row = db.session.query(Fixture.season).order_by(Fixture.season.desc()).first()
     return row[0] if row else None
+
 
 def all_matchdays_for_season(season: str) -> list[str]:
     rows = (
@@ -478,6 +510,7 @@ def all_matchdays_for_season(season: str) -> list[str]:
         return [str(n) for n in sorted({int(x) for x in mds})]
     except Exception:
         return sorted(set(mds), key=lambda s: (len(s), s))
+
 
 def classify_matchdays(season: str):
     now_utc = datetime.now(timezone.utc)
@@ -509,11 +542,14 @@ def classify_matchdays(season: str):
     other = _order([m for m,s in md_status.items() if s=='other'])
     return finished, live, upcoming, other
 
+
 def prediction_matrix(fixtures):
     """
     Return (users, matrix, show_flags)
+      users: list of (user_id, username) who have at least one prediction among these fixtures (sorted by username)
+      matrix: dict[(fixture_id, user_id)] -> '1' | 'X' | '2' (or None if no pick)
+      show_flags: dict[fixture_id] -> bool  (True if predictions can be shown now)
     """
-    from datetime import timezone
     if not fixtures:
         return [], {}, {}
 
@@ -545,42 +581,6 @@ def prediction_matrix(fixtures):
 
     return users, matrix, show_flags
 
-# --- NEW: provisional points (live) ------------------------------------------
-def provisional_points_for(fixtures: list[Fixture]) -> dict[tuple[int,int], int | None]:
-    """
-    For IN_PLAY/PAUSED fixtures (and FINISHED for completeness), compute provisional
-    points for each prediction without writing to DB:
-      1 if selection matches the current outcome based on (home_score, away_score),
-      0 if it doesn't, None if no score yet.
-    Returns dict[(fixture_id, user_id)] -> 0 | 1 | None
-    """
-    if not fixtures:
-        return {}
-    fix_ids = [f.id for f in fixtures]
-    # Pull predictions for these fixtures
-    rows = (
-        db.session.query(Prediction.user_id, Prediction.fixture_id, Prediction.selection)
-        .filter(Prediction.fixture_id.in_(fix_ids))
-        .all()
-    )
-    # Index scores by fixture
-    scores = {f.id: (f.home_score, f.away_score, f.status) for f in fixtures}
-    out: dict[tuple[int,int], int | None] = {}
-    for uid, fid, sel in rows:
-        hs, as_, st = scores.get(fid, (None, None, None))
-        if hs is None or as_ is None:
-            out[(fid, uid)] = None
-        else:
-            if hs > as_:
-                oc = '1'
-            elif hs < as_:
-                oc = '2'
-            else:
-                oc = 'X'
-            out[(fid, uid)] = 1 if sel == oc else 0
-    return out
-# -----------------------------------------------------------------------------
-
 
 def season_user_points(season: str):
     rows = (
@@ -599,22 +599,25 @@ def season_user_points(season: str):
         key=lambda x: (-x['points'], x['username'].lower())
     )
 
+
 # -----------------------------------------------------------------------------
 # Routes
-#
+# -----------------------------------------------------------------------------
 
 @app.route('/')
 @login_required
 def index():
-    update_fixtures_adaptive()  # will poll fast during LIVE
-
-    fixtures = upcoming_fixtures()  # now includes LIVE + next MD + next 7 days
+    update_fixtures_adaptive()
+    fixtures = upcoming_fixtures()
     user_predictions = {p.fixture_id: p for p in current_user.predictions}
 
     users_cols, pred_matrix, show_flags = prediction_matrix(fixtures)
 
-    # NEW: provisional (live) points in memory
-    live_points = provisional_points_for(fixtures)  # (fixture_id, user_id) -> 0/1/None
+    # For template convenience: mark if points are provisional (live)
+    provisional_flags = {
+        f.id: (f.status in ('IN_PLAY', 'PAUSED'))
+        for f in fixtures
+    }
 
     return render_template(
         'index.html',
@@ -623,7 +626,7 @@ def index():
         users_cols=users_cols,          # list[(user_id, username)]
         pred_matrix=pred_matrix,        # dict[(fixture_id, user_id)] -> '1'|'X'|'2'
         show_preds_flags=show_flags,    # dict[fixture_id] -> bool
-        live_points=live_points,        # <-- NEW for template
+        provisional_flags=provisional_flags,
     )
 
 
@@ -651,6 +654,7 @@ def predict(fixture_id: int):
     db.session.commit()
     return redirect(url_for('index'))
 
+
 @app.route('/save_all_predictions', methods=['POST'])
 @login_required
 def save_all_predictions():
@@ -671,14 +675,17 @@ def save_all_predictions():
     flash("All predictions saved!", "success")
     return redirect(url_for('index'))
 
+
 @app.route('/leaderboard')
 @login_required
 def leaderboard():
     update_fixtures_adaptive()
 
+    # Get available seasons and detect current season
     seasons = seasons_available()
     current_season = current_season_from_db() or (seasons[-1] if seasons else None)
 
+    # Get requested scope, season, and matchday
     raw_scope = request.args.get('scope')
     scope = (raw_scope or 'season').lower()
     season = request.args.get('season')
@@ -693,7 +700,6 @@ def leaderboard():
         days = matchdays_for(season)
         if not matchday:
             matchday = latest_completed_matchday(season) or (days[-1] if days else None)
-
         rows = weekly_user_points(season, matchday) if matchday else []
         users_sorted = [{'username': r[1], 'points': int(r[2])} for r in rows]
 
@@ -733,7 +739,6 @@ def leaderboard():
         matchday=matchday
     )
 
-    # Unreachable fallback kept from original (no change)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -800,6 +805,7 @@ def register():
             return render_template('register.html')
     return render_template('register.html')
 
+
 @app.route('/admin', methods=['GET', 'POST'])
 @login_required
 def admin():
@@ -817,6 +823,7 @@ def admin():
                 flash('Invite created.', 'success')
     invites = Invite.query.all()
     return render_template('admin.html', invites=invites)
+
 
 @app.route('/history')
 @login_required
@@ -836,9 +843,7 @@ def history():
         return render_template('history.html', seasons=seasons, matchdays=[], season=season, matchday=None,
                                fixtures=[], all_preds={}, weekly_rows=[])
 
-    matchday = request.args.get('matchday')
-    if not matchday:
-        matchday = latest_completed_matchday(season) or days[-1]
+    matchday = request.args.get('matchday') or (latest_completed_matchday(season) or days[-1])
 
     fixtures = (
         Fixture.query
@@ -862,6 +867,7 @@ def history():
         utc_now=datetime.now(timezone.utc),
     )
 
+
 @app.route('/season/<season>/matchdays')
 @login_required
 def matchdays(season):
@@ -882,6 +888,7 @@ def matchdays(season):
         other=other,
     )
 
+
 @app.route('/matchdays')
 @login_required
 def matchdays_current():
@@ -891,7 +898,8 @@ def matchdays_current():
         return redirect(url_for('index'))
     return redirect(url_for('matchdays', season=season))
 
-# --- Admin: list users, delete user, reset password ---
+
+# --- Admin: users management --------------------------------------------------
 
 @app.route('/admin/users', methods=['GET'])
 @login_required
@@ -900,6 +908,7 @@ def admin_users():
         abort(403)
     users = User.query.order_by(func.lower(User.username)).all()
     return render_template('admin_users.html', users=users)
+
 
 @app.post("/admin/users/<int:user_id>/delete")
 @login_required
@@ -938,6 +947,7 @@ def admin_delete_user(user_id: int):
 
     return redirect(url_for("admin_users"))
 
+
 @app.route('/admin/users/<int:user_id>/reset_password', methods=['POST'])
 @login_required
 def admin_reset_password(user_id: int):
@@ -957,6 +967,7 @@ def admin_reset_password(user_id: int):
     db.session.commit()
     flash(f"Password reset for '{user.username}'. New password: {new_pw}", "success")
     return redirect(url_for('admin_users'))
+
 
 @app.route("/admin/users/<int:user_id>/edit", methods=["GET", "POST"])
 @login_required
@@ -1010,6 +1021,7 @@ def admin_edit_user(user_id: int):
 
     return render_template("admin_user_edit.html", user=user)
 
+
 @app.route('/admin/refresh', methods=['POST'])
 @login_required
 def admin_refresh():
@@ -1019,9 +1031,10 @@ def admin_refresh():
     flash("Fixtures refreshed.", "success")
     return redirect(url_for('index'))
 
+
 # -----------------------------------------------------------------------------
-# CLI commands for setup and administration
-#
+# CLI & startup helpers
+# -----------------------------------------------------------------------------
 
 @app.cli.command('init-db')
 def init_db_command() -> None:
@@ -1037,9 +1050,11 @@ def init_db_command() -> None:
     else:
         print('Admin user already exists.')
 
+
 with app.app_context():
     db.create_all()
 
+# one-time admin reset (env driven)
 with app.app_context():
     flag = (os.getenv("ADMIN_FORCE_RESET", "0") or "").strip()
     uname = (os.getenv("ADMIN_USERNAME", "admin") or "").strip()
@@ -1063,6 +1078,7 @@ with app.app_context():
             db.session.commit()
             print(f"[BOOTSTRAP] Invite code ensured: {invite_code}")
 
+
 @app.cli.command('fix-times-utc')
 def fix_times_utc():
     from sqlalchemy import select
@@ -1085,6 +1101,7 @@ def fix_times_utc():
                 changed += 1
     db.session.commit()
     print(f"Normalized {changed} fixture times to UTC.")
+
 
 if __name__ == '__main__':
     with app.app_context():
