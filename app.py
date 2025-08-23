@@ -142,39 +142,30 @@ class Fixture(db.Model):
         return now_utc < md
 
     def display_status(self) -> str:
-            """
-            Human-friendly status that falls back to time-based inference when the API status is stale.
-            SCHEDULED/TIMED -> 'TIMED' (before KO)
-            IN_PLAY/PAUSED -> 'LIVE'
-            FINISHED       -> 'FT'
-            After KO but status still SCHEDULED/TIMED -> infer 'LIVE'
-            Long after KO and a score exists -> 'FT'
-            """
-            tz = ZoneInfo('America/New_York')
-            now = datetime.now(tz)
-            md = self.match_date
-            if md.tzinfo is None:
-                md = md.replace(tzinfo=tz)
-    
-            # Trust explicit statuses first
-            if self.status in ('IN_PLAY', 'PAUSED'):
-                return 'LIVE'
-            if self.status == 'FINISHED':
-                return 'FT'
-    
-            # Fall back to time-based inference
-            if now < md:
-                return 'TIMED'
-    
-            # Between KO and ~2.5h after KO, if not finished -> treat as live
-            if now <= md + timedelta(hours=2, minutes=30):
-                return 'LIVE'
-    
-            # After that window: if we have a score or we’re well past KO => FT
-            if (self.home_score is not None and self.away_score is not None) or now > md + timedelta(hours=3):
-                return 'FT'
-    
+        """
+        Human-friendly status with time-based fallback so we don't stay on 'TIMED'.
+        """
+        # Normalize kickoff to UTC
+        md = self.match_date
+        if md.tzinfo is None:
+            md = md.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+
+        # Trust explicit statuses first
+        if self.status in ('IN_PLAY', 'PAUSED'):
             return 'LIVE'
+        if self.status == 'FINISHED':
+            return 'FT'
+
+        # If API is stale:
+        if now < md:
+            return 'TIMED'                            # before kickoff
+        if now <= md + timedelta(hours=2, minutes=30):
+            return 'LIVE'                             # around match window
+        if (self.home_score is not None and self.away_score is not None) or now > md + timedelta(hours=3):
+            return 'FT'                               # long after KO or score present
+
+        return 'LIVE'
 
 class Prediction(db.Model):
     __tablename__ = "predictions"
