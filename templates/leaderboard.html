@@ -1,184 +1,121 @@
-{% extends "layout.html" %}
-{% block title %}Leaderboard · Serie A Predictor{% endblock %}
-
-{% block content %}
-<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-  <h1 class="h1">Leaderboard</h1>
-</div>
-
-<form class="board-controls" method="get" action="{{ url_for('leaderboard') }}">
-  <div class="controls-row">
-    <!-- Scope -->
-    <div class="control">
-      <label class="label" for="scope">Scope</label>
-      <select id="scope" name="scope" class="select" onchange="onScopeChange(this)">
-        <option value="overall" {{ 'selected' if scope=='overall' else '' }}>Overall</option>
-        <option value="season"  {{ 'selected' if scope=='season'  else '' }}>Season</option>
-        <option value="week"    {{ 'selected' if scope=='week'    else '' }}>Matchday</option>
-      </select>
-    </div>
-
-    <!-- Season (visible for season/week) -->
-    <div class="control" id="seasonCtrl" style="display:none;">
-      <label class="label" for="season">Season</label>
-      <select id="season" name="season" class="select" onchange="this.form.submit()">
-        {% for s in seasons %}
-          <option value="{{ s }}" {{ 'selected' if season==s else '' }}>{{ s }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <!-- Matchday (visible for week) -->
-    <div class="control" id="mdCtrl" style="display:none;">
-      <label class="label" for="matchday">Matchday</label>
-      <select id="matchday" name="matchday" class="select" onchange="this.form.submit()">
-        {% for md in matchdays %}
-          <option value="{{ md }}" {{ 'selected' if matchday|string==md|string else '' }}>MD {{ md }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="control control--btn" style="margin-left:auto;">
-      <label class="label" style="visibility:hidden;">&nbsp;</label>
-      <button class="btn btn-primary" type="submit">Update</button>
-    </div>
-  </div>
-
-  {% if scope == 'season' and season %}
-    <p class="subtle">Showing season totals for <strong>{{ season }}</strong>.</p>
-  {% elif scope == 'week' and season and matchday %}
-    <p class="subtle">Showing matchday <strong>{{ matchday }}</strong> · <strong>{{ season }}</strong>.</p>
-  {% elif scope == 'overall' %}
-    <p class="subtle">Showing all‑time points.</p>
-  {% endif %}
-</form>
-
-<div class="table-card">
-  <!-- Desktop / Tablet Table -->
-  <div class="table-responsive hide-on-mobile">
-    <table class="table table-striped" style="min-width:560px;">
-      <thead>
-        <tr>
-          <th class="th" style="width:64px;">#</th>
-          <th class="th">User</th>
-          <th class="th num" style="width:140px;">Points</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in users %}
-          {% set uname = (u.username if u.username is defined else u['username']) %}
-          {% set pts   = (u.points   if u.points   is defined else u['points']) %}
-          <tr>
-            <td class="td num">{{ loop.index }}</td>
-            <td class="td">{{ uname }}</td>
-            <td class="td num"><strong>{{ pts }}</strong></td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Mobile Compact List (no horizontal scroll) -->
-  <div class="mobile-list show-on-mobile" role="list">
-    {% for u in users %}
-      {% set uname = (u.username if u.username is defined else u['username']) %}
-      {% set pts   = (u.points   if u.points   is defined else u['points']) %}
-      <div class="mobile-row" role="listitem">
-        <div class="cell rank">{{ loop.index }}</div>
-        <div class="cell name" title="{{ uname }}">{{ uname }}</div>
-        <div class="cell pts">
-          <span class="pts-badge">{{ pts }}</span>
-        </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Leaderboard · Serie A Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-dark text-white">
+  <!-- Navigation bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarLeaderboard" aria-controls="navbarLeaderboard" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarLeaderboard">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('index') }}">Fixtures</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" aria-current="page" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+          </li>
+          {% if current_user.is_authenticated and current_user.is_admin %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('admin') }}">Admin</a>
+            </li>
+          {% endif %}
+          {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+            </li>
+          {% endif %}
+        </ul>
       </div>
-    {% endfor %}
+    </div>
+  </nav>
+
+  <div class="container py-4">
+    <h1 class="h4 mb-4">Leaderboard</h1>
+    <!-- Controls for scope, season and matchday -->
+    <form method="get" class="row g-3 align-items-end mb-4">
+      <div class="col-auto">
+        <label for="scope" class="form-label">Scope</label>
+        <select id="scope" name="scope" class="form-select" onchange="this.form.submit()">
+          <option value="overall" {% if scope == 'overall' %}selected{% endif %}>Overall</option>
+          <option value="season" {% if scope == 'season' %}selected{% endif %}>Season</option>
+          <option value="week" {% if scope == 'week' %}selected{% endif %}>Matchday</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label for="season" class="form-label">Season</label>
+        <select id="season" name="season" class="form-select" onchange="this.form.submit()">
+          {% for s in seasons %}
+          <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if scope == 'week' %}
+      <div class="col-auto">
+        <label for="matchday" class="form-label">Matchday</label>
+        <select id="matchday" name="matchday" class="form-select" onchange="this.form.submit()">
+          {% for md in matchdays %}
+          <option value="{{ md }}" {% if md == matchday %}selected{% endif %}>{{ md }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+    </form>
+
+    <!-- Leaderboard table -->
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered align-middle">
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">User</th>
+            <th scope="col">Points</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>
+              {% if user.username is defined %}
+                {{ user.username }}
+              {% else %}
+                {{ user['username'] }}
+              {% endif %}
+            </td>
+            <td>
+              {% if user.points is defined %}
+                {{ user.points }}
+              {% else %}
+                {{ user['points'] }}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
-</div>
-{% endblock %}
 
-{% block scripts %}
-<script>
-  function toggleControls() {
-    const scope = document.getElementById('scope')?.value || 'overall';
-    const seasonCtrl = document.getElementById('seasonCtrl');
-    const mdCtrl = document.getElementById('mdCtrl');
-    if (!seasonCtrl || !mdCtrl) return;
-
-    if (scope === 'overall') {
-      seasonCtrl.style.display = 'none';
-      mdCtrl.style.display = 'none';
-    } else if (scope === 'season') {
-      seasonCtrl.style.display = '';
-      mdCtrl.style.display = 'none';
-    } else { // week
-      seasonCtrl.style.display = '';
-      mdCtrl.style.display = '';
-    }
-  }
-  function onScopeChange(sel){
-    toggleControls();
-    // Submit immediately when changing scope for snappy UX
-    sel.form.submit();
-  }
-  document.addEventListener('DOMContentLoaded', toggleControls);
-</script>
-
-<style>
-  /* Page-local styles that complement your global styles.css */
-
-  /* Hide/show blocks depending on viewport */
-  .hide-on-mobile { display: block; }
-  .show-on-mobile { display: none; }
-
-  /* Mobile list styling */
-  .mobile-list { padding: .25rem .5rem; }
-  .mobile-row {
-    display: grid;
-    grid-template-columns: 40px 1fr auto;
-    align-items: center;
-    gap: .5rem;
-    padding: .6rem .4rem;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-  }
-  .mobile-row:last-child { border-bottom: 0; }
-
-  .mobile-row .rank {
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    opacity: .8;
-  }
-  .mobile-row .name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .mobile-row .pts {
-    text-align: right;
-  }
-  .pts-badge {
-    display: inline-block;
-    min-width: 2.5ch;
-    padding: .25rem .55rem;
-    border-radius: 9999px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.15);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Slightly denser table for better fit on small laptops */
-  @media (max-width: 900px) {
-    .table .th, .table .td { padding: .6rem .7rem; }
-  }
-
-  /* Phone layout: switch to compact list with no horizontal scroll */
-  @media (max-width: 640px) {
-    .hide-on-mobile { display: none; }
-    .show-on-mobile { display: block; }
-
-    .board-controls { padding: .6rem; }
-    .controls-row { gap: .5rem; }
-    .control { min-width: 48%; }
-    .control.control--btn { min-width: auto; margin-left: 0; }
-    .h1 { font-size: 1.4rem; }
-  }
-</style>
-{% endblock %}
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
