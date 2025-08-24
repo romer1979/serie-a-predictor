@@ -203,7 +203,11 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   padding: .25rem .5rem;
   font-size: .875rem;
   background: var(--bs-gray-800, rgba(255,255,255,.06));
-  color: var(--bs-body-color, inherit);
+  /* Ensure the prediction chips use a light colour rather than the
+     default table text colour.  Fallback to ``inherit`` to avoid
+     black text on dark backgrounds when the Bootstrap variable is
+     undefined. */
+  color: #f8f9fa;
   border: 1px solid var(--bs-gray-700, rgba(255,255,255,.18));
 }
 .mb-name { font-weight: 600; margin-right: .25rem; }
@@ -211,6 +215,20 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
 .pick-correct {
   background: rgba(25, 135, 84, .15);
   border-color: rgba(25, 135, 84, .35);
+}
+
+/*
+ * Override text colours for picks shown in the fixtures table.  Without
+ * these declarations Bootstrap's default table colours can render
+ * predictions in a dark colour that is hard to read on a dark
+ * background.  By explicitly setting them to a light tone we ensure
+ * readability across themes.
+ */
+.desk-pick,
+.mb-pick,
+.mb-name,
+.mb-sep {
+  color: #f8f9fa;
 }
 
 /* ====== Buttons ====== */
