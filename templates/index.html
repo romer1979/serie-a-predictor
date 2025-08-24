@@ -11,7 +11,6 @@
         {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
       </h1>
 
-      <!-- This button now submits the radios because they live INSIDE this form -->
       <button class="btn btn-primary" type="submit" style="padding:10px 18px;">
         💾 Save All Predictions
       </button>
@@ -22,20 +21,19 @@
     {% else %}
     <div class="table-card">
       <div class="table-responsive" style="overflow:auto;">
-        <!-- table-layout:auto allows kickoff column to shrink to fit content -->
-        <table class="table table-striped" style="min-width:980px; table-layout:auto;">
+        <table class="table table-striped fixtures-table">
           <colgroup>
-            <!-- Kickoff: width 1% tricks browser to shrink-to-fit content -->
-            <col class="col-kickoff" style="width:1%;">
-            <!-- Match (intentionally compact; rest of free space) -->
-            <col class="col-match" style="width:220px;">
-            <!-- Each user column (desktop only) gets a narrow, equal width -->
+            <!-- Kickoff (stack date/time; compact) -->
+            <col class="col-kickoff">
+            <!-- Match (intentionally narrower) -->
+            <col class="col-match">
+            <!-- Each user column gets a narrow, equal width (desktop only) -->
             {% for uid, uname in users_cols %}
-              <col class="col-user only-desktop" style="width:54px;">
+              <col class="col-user">
             {% endfor %}
             <!-- Result & Status at the end -->
-            <col class="col-result" style="width:80px;">
-            <col class="col-status" style="width:70px;">
+            <col class="col-result">
+            <col class="col-status">
           </colgroup>
 
           <thead>
@@ -43,9 +41,7 @@
               <th class="th kickoff-col">Kickoff</th>
               <th class="th">Match</th>
               {% for uid, uname in users_cols %}
-                <th class="th only-desktop"
-                    title="{{ uname }}"
-                    style="text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                <th class="th user-col" title="{{ uname }}">
                   {{ uname }}
                 </th>
               {% endfor %}
@@ -58,11 +54,10 @@
             {% for f in fixtures %}
               {% set my = user_predictions.get(f.id) %}
               {% set locked = not f.is_open_for_prediction() %}
-              {% set reveal = show_preds_flags.get(f.id) %}
               <tr>
 
                 <!-- Kickoff: two lines (date / time). JS will localize from data-utc -->
-                <td class="td kickoff" style="white-space:nowrap;">
+                <td class="td kickoff">
                   <div class="kickoff-date"
                        data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
                     <!-- filled by JS -->
@@ -72,7 +67,7 @@
 
                 <!-- Match + your ONE set of radios -->
                 <td class="td">
-                  <div class="match-title" title="{{ f.home_team }} vs {{ f.away_team }}">
+                  <div class="match-title">
                     {{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}
                   </div>
 
@@ -93,32 +88,27 @@
                     {% endif %}
                   </div>
 
-                  <!-- MOBILE-ONLY: all players’ picks in ONE horizontal line -->
-                  {% if reveal and preds and preds.get(f.id) %}
-                    <div class="predictions-strip only-mobile" aria-label="Players' picks">
-                      {% for uname, pick in preds[f.id].items() %}
-                        <span class="pick-pill">
-                          <span class="pick-name">{{ uname }}</span>&nbsp;<strong>{{ pick }}</strong>
-                        </span>
+                  <!-- MOBILE: all players’ picks inline under the match -->
+                  {% if all_preds and all_preds.get(f.id) %}
+                    <div class="mobile-picks-row">
+                      {% for uname, sel in all_preds.get(f.id) %}
+                        <span class="pick-chip pick-{{ sel|lower }}">{{ uname }}: {{ sel }}</span>
                       {% endfor %}
                     </div>
                   {% endif %}
                 </td>
 
-                <!-- DESKTOP-ONLY: one column per user -->
+                <!-- DESKTOP: one column per user, show pick -->
                 {% for uid, uname in users_cols %}
-                  {% set pick = pred_matrix.get((f.id, uid)) %}
-                  <td class="td only-desktop" style="text-align:center;font-variant-numeric:tabular-nums;">
-                    {% if reveal %}
-                      {{ pick or '—' }}
-                    {% else %}
-                      <span class="muted tiny">—</span>
-                    {% endif %}
+                  {% set pick = (all_preds.get(f.id)|selectattr(0, 'equalto', uname)|list if all_preds else []) %}
+                  {% set shown = (pick[0][1] if pick and pick[0]|length > 1 else '—') %}
+                  <td class="td user-col-td">
+                    {{ shown }}
                   </td>
                 {% endfor %}
 
                 <!-- Result -->
-                <td class="td" style="text-align:right;font-variant-numeric:tabular-nums;">
+                <td class="td td-result">
                   {% if f.home_score is not none and f.away_score is not none %}
                     <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
                   {% else %}
@@ -127,7 +117,7 @@
                 </td>
 
                 <!-- Status LAST -->
-                <td class="td" style="text-align:center;">
+                <td class="td td-status">
                   {% set s = f.display_status() %}
                   <span class="pill
                               {% if s == 'LIVE' %} live
@@ -176,58 +166,4 @@
     if (timeEl) timeEl.textContent = fmtTime(iso);
   });
 </script>
-
-<style>
-  /* ---------- desktop vs mobile toggles ---------- */
-  .only-mobile { display: none; }
-  .only-desktop { display: table-cell; }
-
-  @media (max-width: 768px){
-    .only-mobile { display: block; }
-    .only-desktop { display: none; }
-  }
-
-  /* ---------- kickoff column that fits content ---------- */
-  .kickoff-col { white-space: nowrap; }
-  td.kickoff {
-    text-align: center;
-    line-height: 1.15;
-    white-space: nowrap; /* keep date/time tidy */
-  }
-  .kickoff-date { font-weight: 600; font-size: .86rem; }
-  .kickoff-time { font-size: .8rem;  opacity: .85; }
-
-  /* ---------- match column compact ---------- */
-  .match-title {
-    font-weight: 600;
-    margin-bottom: 6px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* ---------- radios: inline on all screens (mobile too) ---------- */
-  .choice {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    flex-wrap: nowrap; /* horizontal on mobile as requested */
-  }
-  .choice .radio {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  /* keep Result & Status visible on mobile; widths stay compact */
-  @media (max-width: 768px){
-    .col-kickoff { width: 1%; }       /* stays shrink-to-fit */
-    .col-match   { width: 180px; }    /* compact match column */
-    .col-result  { width: 68px; }
-    .col-status  { width: 64px; }
-
-    .kickoff-date { font-size: .82rem; }
-    .kickoff-time { font-size: .76rem; }
-  }
-</style>
 {% endblock %}
