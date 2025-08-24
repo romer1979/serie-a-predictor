@@ -2,205 +2,139 @@
 {% block title %}Fixtures · Serie A Predictor{% endblock %}
 
 {% block content %}
+  <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <h1 style="margin:0;font-size:20px;">
+      {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
+    </h1>
 
-<!-- Header / Save-all -->
-<div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-  <h1 style="margin:0;font-size:20px;">
-    {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
-  </h1>
+    <!-- Top Save button (desktop/tablet) -->
+    <form method="post" action="{{ url_for('save_all_predictions') }}" class="hide-on-mobile">
+      <button class="btn btn-primary" type="submit" style="padding:10px 18px;">💾 Save All Predictions</button>
+    </form>
+  </div>
+
+  {% if fixtures|length == 0 %}
+    <div class="card">No fixtures in the next 7 days. Check back soon!</div>
+  {% else %}
+
+  <!-- SINGLE form wrapping all radios so there’s only one source of truth -->
   <form method="post" action="{{ url_for('save_all_predictions') }}">
-    <button class="btn btn-primary" type="submit" style="padding:10px 18px;">💾 Save All Predictions</button>
-  </form>
-</div>
+    <div class="table-card">
+      <div class="table-responsive" style="overflow:auto;">
+        <table class="table table-striped" style="min-width:920px;">
+          <thead>
+            <tr>
+              <th class="th" style="min-width:160px;">Kickoff (local)</th>
+              <th class="th">Match</th>
+              <th class="th" style="width:90px;">Status</th>
+              <th class="th" style="min-width:210px; text-align:center;">Your Pick</th>
+              <th class="th" style="min-width:220px;">Others’ picks (post‑KO)</th>
+              <th class="th" style="width:110px;text-align:right;">Result</th>
+            </tr>
+          </thead>
 
-{% if fixtures|length == 0 %}
-  <div class="card">No fixtures available. Check back soon!</div>
-{% else %}
+          <tbody>
+            {% for f in fixtures %}
+              {% set my = user_predictions.get(f.id) %}
+              {% set locked = not f.is_open_for_prediction() %}
+              {% set outcome = f.outcome_code() %}
+              <tr>
+                <!-- Kickoff -->
+                <td class="td">
+                  <div>
+                    <time class="kickoff-local"
+                          data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
+                      {{ f.match_date }}
+                    </time>
+                  </div>
+                  <div class="tiny subtle kickoff-rel"></div>
+                </td>
 
-<!-- ============================= -->
-<!-- Desktop / tablet table view   -->
-<!-- ============================= -->
-<div class="table-card hide-on-mobile">
-  <div class="table-responsive">
-    <table class="table table-striped" style="min-width:980px;">
-      <thead>
-        <tr>
-          <th class="th" style="min-width:180px;">Kickoff (local)</th>
-          <th class="th">Match</th>
-          <th class="th" style="width:100px;">Status</th>
-          <th class="th" style="min-width:230px;">Your Pick</th>
-          {% for uid, uname in users_cols %}
-            <th class="th" title="{{ uname }}">{{ uname }}</th>
-          {% endfor %}
-          <th class="th" style="width:110px;text-align:right;">Result</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for f in fixtures %}
-          {% set my = user_predictions.get(f.id) %}
-          {% set locked = not f.is_open_for_prediction() %}
-          {% set reveal = show_preds_flags.get(f.id) %}
-          {% set outcome = f.outcome_code() %}
-          <tr>
-            <!-- Kickoff -->
-            <td class="td">
-              <div>
-                <time class="kickoff-local"
-                      data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
-                  {{ f.match_date }}
-                </time>
-              </div>
-              <div class="tiny subtle kickoff-rel"></div>
-            </td>
+                <!-- Match -->
+                <td class="td">
+                  <div class="fw-semibold">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+                  <div class="tiny muted">Matchday {{ f.matchday or '—' }}</div>
+                </td>
 
-            <!-- Match -->
-            <td class="td">
-              <div class="fw-semibold">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
-              <div class="tiny muted">Matchday {{ f.matchday or '—' }}</div>
-            </td>
+                <!-- Status -->
+                <td class="td">
+                  {% set s = f.display_status() %}
+                  <span class="pill
+                              {% if s == 'LIVE' %} live
+                              {% elif s == 'FT' %} finished
+                              {% else %} scheduled
+                              {% endif %}">
+                    {{ s }}
+                  </span>
+                </td>
 
-            <!-- Status -->
-            <td class="td">
-              {% set s = f.display_status() %}
-              <span class="pill
-                          {% if s == 'LIVE' %} live
-                          {% elif s == 'FT' %} finished
-                          {% else %} scheduled
-                          {% endif %}">
-                {{ s }}
-              </span>
-            </td>
+                <!-- Your pick (radios named fixture_{id}, no per-row submit) -->
+                <td class="td" style="text-align:center;">
+                  <div class="choice" style="display:flex; gap:10px; justify-content:center; align-items:center;">
+                    {% for opt,label in [('1','1'),('X','X'),('2','2')] %}
+                      <label class="radio" style="display:inline-flex; flex-direction:column; align-items:center; gap:4px;">
+                        <input
+                          type="radio"
+                          name="fixture_{{ f.id }}"
+                          value="{{ opt }}"
+                          {% if my and my.selection == opt %}checked{% endif %}
+                          {% if locked %}disabled{% endif %}>
+                        <span class="tiny">{{ label }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+                  {% if locked and f.status != 'FINISHED' %}
+                    <div class="tiny muted" style="margin-top:.25rem;">Locked</div>
+                  {% endif %}
+                </td>
 
-            <!-- Your pick (radio only; saving via Save All) -->
-            <td class="td">
-              <div class="choice" style="display:flex; gap:12px; justify-content:center;">
-                {% for opt,label in [('1','1'),('X','X'),('2','2')] %}
-                  <label class="radio" style="text-align:center;">
-                    <input type="radio" name="fixture_{{ f.id }}" value="{{ opt }}"
-                           form="bulk-save-form"
-                           {% if my and my.selection == opt %}checked{% endif %}
-                           {% if locked %}disabled{% endif %}>
-                    <span class="tiny">{{ label }}</span>
-                  </label>
-                {% endfor %}
-                {% if locked and f.status != 'FINISHED' %}
-                  <span class="tiny muted">Locked</span>
-                {% endif %}
-              </div>
-            </td>
+                <!-- Others’ picks (only reveal after kickoff); highlight correct when FT -->
+                <td class="td">
+                  {% set picks = all_preds.get(f.id, []) %}
+                  {% if locked %}
+                    <div class="predictions-strip">
+                      {% for uname, sel in picks %}
+                        {% set correct = (outcome and sel == outcome) %}
+                        <span class="pick-pill {% if correct %}pick-correct{% endif %}">
+                          <span class="pick-name">{{ uname }}</span>: {{ sel }}
+                        </span>
+                      {% endfor %}
+                      {% if picks|length == 0 %}
+                        <span class="tiny muted">No picks yet</span>
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    <span class="tiny muted">Hidden until kickoff</span>
+                  {% endif %}
+                </td>
 
-            <!-- Others' picks -->
-            {% for uid, uname in users_cols %}
-              {% set pick = pred_matrix.get((f.id, uid)) %}
-              {% set correct = (outcome is not none and pick == outcome) %}
-              <td class="td" style="text-align:center;font-variant-numeric:tabular-nums;">
-                {% if reveal %}
-                  <span class="pick-pill {% if correct %}pick-correct{% endif %}">{{ pick or '—' }}</span>
-                {% else %}
-                  <span class="muted tiny">—</span>
-                {% endif %}
-              </td>
+                <!-- Result -->
+                <td class="td" style="text-align:right; font-variant-numeric:tabular-nums;">
+                  {% if f.home_score is not none and f.away_score is not none %}
+                    <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
             {% endfor %}
-
-            <!-- Result -->
-            <td class="td" style="text-align:right;font-variant-numeric:tabular-nums;">
-              {% if f.home_score is not none and f.away_score is not none %}
-                <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
-              {% else %}
-                <span class="muted">—</span>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- ===================================== -->
-<!-- Phone-optimized: zero-scroll controls  -->
-<!-- ===================================== -->
-<form id="bulk-save-form" method="post" action="{{ url_for('save_all_predictions') }}" class="show-on-mobile mobile-fixtures">
-  {% for f in fixtures %}
-    {% set my = user_predictions.get(f.id) %}
-    {% set locked = not f.is_open_for_prediction() %}
-    {% set reveal = show_preds_flags.get(f.id) %}
-    {% set outcome = f.outcome_code() %}
-
-    <div class="mrow">
-      <!-- Left: kickoff + teams -->
-      <div class="mcol info">
-        <div class="koff">
-          <time class="kickoff-local" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}"></time>
-          <span class="tiny kickoff-rel"></span>
-        </div>
-        <div class="teams"><strong>{{ f.home_team }}</strong> vs <strong>{{ f.away_team }}</strong></div>
-        <div class="tiny muted">MD {{ f.matchday or '—' }}</div>
-      </div>
-
-      <!-- Middle: status + result -->
-      <div class="mcol status">
-        {% set s = f.display_status() %}
-        <div class="status-pill pill
-          {% if s == 'LIVE' %} live
-          {% elif s == 'FT' %} finished
-          {% else %} scheduled
-          {% endif %}">{{ s }}</div>
-
-        <div class="score">
-          {% if f.home_score is not none and f.away_score is not none %}
-            <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
-          {% else %}
-            <span class="muted">—</span>
-          {% endif %}
-        </div>
-      </div>
-
-      <!-- Right: big 1 / X / 2 buttons (no scrolling needed) -->
-      <div class="mcol picks">
-        {% for opt in ['1','X','2'] %}
-          <label class="pickbtn {% if my and my.selection == opt %}active{% endif %} {% if locked %}disabled{% endif %}">
-            <input type="radio" name="fixture_{{ f.id }}" value="{{ opt }}"
-                   {% if my and my.selection == opt %}checked{% endif %}
-                   {% if locked %}disabled{% endif %}>
-            {{ opt }}
-          </label>
-        {% endfor %}
-        {% if locked and f.status != 'FINISHED' %}
-          <div class="tiny muted" style="margin-top:6px;">Locked</div>
-        {% endif %}
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <!-- Others' picks: wraps to multiple lines (no horizontal scroll) -->
-    <div class="mrow picks-others">
-      {% if reveal %}
-        {% for uid, uname in users_cols %}
-          {% set pick = pred_matrix.get((f.id, uid)) %}
-          {% set correct = (outcome is not none and pick == outcome) %}
-          <span class="chip {% if correct %}pick-correct{% endif %}" title="{{ uname }}">
-            <span class="chip-name">{{ uname }}</span>
-            <span class="chip-pick">{{ pick or '—' }}</span>
-          </span>
-        {% endfor %}
-      {% else %}
-        <span class="tiny muted">Predictions hidden until kickoff.</span>
-      {% endif %}
+    <!-- Bottom sticky Save bar (mobile) -->
+    <div class="sticky-save show-on-mobile" style="position:sticky;bottom:0;padding:.5rem .25rem;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:center;background:var(--bs-body-bg);z-index:10;">
+      <button class="btn btn-primary" type="submit" style="min-width:220px;">💾 Save All Predictions</button>
     </div>
-  {% endfor %}
+  </form>
 
-  <!-- Save-all fixed at bottom of screen on phones -->
-  <div class="sticky-save-bar">
-    <button class="btn btn-primary" type="submit">💾 Save All Predictions</button>
-  </div>
-</form>
-
-{% endif %}
+  {% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-  // Localize kickoff + relative label
+  // Render kickoff in local time + relative label
   function fmt(dt){
     const d = new Date(dt);
     const opts = {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'};
@@ -218,91 +152,27 @@
     const iso = el.getAttribute('data-utc');
     if (!iso) return;
     el.textContent = fmt(iso);
-    const r = el.parentElement?.querySelector('.kickoff-rel');
-    if (r) r.textContent = rel(iso);
+    const relEl = el.parentElement.nextElementSibling;
+    if (relEl && relEl.classList.contains('kickoff-rel')) relEl.textContent = rel(iso);
   });
 </script>
 
 <style>
-  /* View toggles */
-  .hide-on-mobile { display: block; }
-  .show-on-mobile { display: none; }
+/* Hide top save on small screens; show bottom sticky bar instead */
+@media (max-width: 640px) {
+  .hide-on-mobile { display: none !important; }
+  .show-on-mobile { display: block !important; }
 
-  /* ===== Mobile layout (no scrolling for controls) ===== */
-  .mobile-fixtures { display: grid; gap: .5rem; }
-  .mrow {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    gap: .6rem;
-    align-items: center;
-    padding: .6rem .6rem;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-  }
-  .mrow:last-child { border-bottom: 0; }
-  .mcol.info { min-width: 0; }
-  .koff { font-size: .9rem; line-height: 1.1; }
-  .teams { font-size: .95rem; margin-top: .15rem; }
+  /* tighter table padding for phones */
+  .table .th, .table .td { padding: .55rem .6rem; }
 
-  .mcol.status { text-align: center; min-width: 70px; }
-  .status-pill { display: inline-block; padding: .2rem .5rem; border-radius: 9999px; font-size: .78rem; }
-  .pill.live { background: rgba(220,53,69,.15); border:1px solid rgba(220,53,69,.3);}
-  .pill.finished { background: rgba(25,135,84,.15); border:1px solid rgba(25,135,84,.35);}
-  .pill.scheduled { background: rgba(108,117,125,.15); border:1px solid rgba(108,117,125,.35);}
-
-  .score { margin-top: .25rem; font-variant-numeric: tabular-nums; }
-
-  .mcol.picks {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: .35rem;
-    justify-items: stretch;
+  /* make radio inputs bigger tap targets */
+  .choice input[type="radio"] {
+    width: 22px; height: 22px;
   }
-  .pickbtn {
-    display: inline-grid; place-items: center;
-    padding: .5rem 0; border-radius: 10px; cursor: pointer;
-    border: 1px solid rgba(255,255,255,0.15);
-    background: rgba(255,255,255,0.06);
-    font-weight: 600;
-    user-select: none;
-  }
-  .pickbtn input { display:none; }
-  .pickbtn.active { outline: 2px solid #2563eb; }
-  .pickbtn.disabled { opacity: .55; cursor: not-allowed; }
-
-  /* Others’ picks as wrapping chips: no horizontal scroll */
-  .picks-others {
-    display: flex; flex-wrap: wrap; gap: .35rem .4rem;
-    padding: 0 .6rem .6rem .6rem;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-  }
-  .chip {
-    display: inline-flex; align-items: center; gap: .35rem;
-    border-radius: 9999px; padding: .2rem .45rem;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.15);
-    font-size: .85rem;
-  }
-  .chip-name { max-width: 8.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chip-pick { font-weight: 700; }
-
-  /* Highlight correct picks (LIVE/FT) */
-  .pick-correct {
-    background: rgba(25, 135, 84, .18);
-    border-color: rgba(25, 135, 84, .35);
-  }
-
-  /* Sticky save bar on phones (always visible) */
-  .sticky-save-bar {
-    position: sticky; bottom: 0; z-index: 100;
-    padding: .6rem; background: var(--bs-body-bg);
-    border-top: 1px solid rgba(255,255,255,0.08);
-  }
-
-  /* Phone breakpoint */
-  @media (max-width: 640px) {
-    .hide-on-mobile { display: none; }
-    .show-on-mobile { display: block; }
-    .section-title h1 { font-size: 18px; }
-  }
+}
+@media (min-width: 641px) {
+  .show-on-mobile { display: none !important; }
+}
 </style>
 {% endblock %}
