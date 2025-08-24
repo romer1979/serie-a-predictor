@@ -1,46 +1,70 @@
-/* ---------- Base table layout ---------- */
-.fixtures-table {
+.table > :not(caption) > * > * { vertical-align: middle; }
+.card { border-radius: 14px; }
+.badge { letter-spacing: .2px; }
+.toast { border-radius: 12px; }
+
+/* Save button */
+.save-all-predictions-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 1000;
+}
+
+/* ====== Generic table polish ====== */
+.table-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: auto;             /* allow natural widths */
-  min-width: 820px;               /* keeps desktop readable */
+  table-layout: auto;      /* let Kickoff fit its content */
+}
+.th, .td {
+  padding: .75rem .9rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.table thead .th {
+  font-weight: 600;
+  background: rgba(255,255,255,0.04);
+}
+.table-striped tbody tr:nth-child(odd) .td {
+  background: rgba(255,255,255,0.02);
 }
 
-.fixtures-table .th,
-.fixtures-table .td {
-  padding: 10px 12px;
-  vertical-align: middle;
-  border-bottom: 1px solid #eceff3;
-  background: #fff;
+/* Numbers align */
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  -moz-font-feature-settings: "tnum";
+  -webkit-font-feature-settings: "tnum";
+  font-feature-settings: "tnum";
 }
 
-.table-striped tbody tr:nth-child(odd) .td { background: #fafbfc; }
+/* Small text helpers */
+.subtle { opacity: .8; margin: .25rem 0 1rem; }
+.footnote { opacity: .7; margin-top: 1rem; font-size: .9rem; }
+.tiny { font-size: .85rem; }
 
-/* ---------- Columns ---------- */
-/* Kickoff: fit exactly to content (date on top, time under it) */
-.col-kickoff { width: 1%; }        /* let it shrink to fit */
-td.kickoff {
-  text-align: center;
-  white-space: nowrap;
-  line-height: 1.15;
-}
-.kickoff-date { font-weight: 600; font-size: .86rem; }
-.kickoff-time { font-size: .8rem; opacity: .85; }
+/* ====== Column sizing logic ======
+   Kickoff fits content; Match flexes; user cols are narrow; result/status compact */
+.col-kickoff { width: 1%; }   /* shrink-wrapping content */
+.col-match   { width: auto; }
+.col-user    { width: 48px; }
+.col-result  { width: 1%; }
+.col-status  { width: 1%; }
 
-/* Make Match column reasonably compact */
-.col-match { width: 260px; }
+/* Kickoff cell: two lines stacked, center */
+td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
+.kickoff-date { font-weight: 600; font-size: .9rem; }
+.kickoff-time { font-size: .82rem; opacity: .9; }
 
-/* Compact user columns on desktop */
-.col-user { width: 58px; }
-
-/* Result & Status always visible */
-.col-result { width: 88px; }
-.col-status { width: 78px; }
-
-.result-cell { text-align: right; font-variant-numeric: tabular-nums; }
-
-/* ---------- Content styles ---------- */
+/* Match title narrower with ellipsis */
 .match-title {
   font-weight: 600;
   margin-bottom: 6px;
@@ -49,72 +73,99 @@ td.kickoff {
   text-overflow: ellipsis;
 }
 
+/* Radio group for your pick */
 .choice {
   display: flex;
   gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
-.choice .radio {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.tiny { font-size: 12px; }
-.muted { opacity: .6; }
+.choice .radio { display: inline-flex; align-items: center; gap: 6px; }
 
-.pill {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  background: #eef2f7;
-  color: #334155;
-}
-.pill.live { background: #fff1f2; color: #be123c; }
-.pill.finished { background: #ecfdf5; color: #065f46; }
-.pill.scheduled { background: #eff6ff; color: #1e40af; }
+/* Status pills */
+.pill { font-size: .8rem; padding: .25rem .5rem; border-radius: 999px; white-space: nowrap; }
+.pill.live     { background: rgba(220,53,69,.15);  border: 1px solid rgba(220,53,69,.35); }
+.pill.finished { background: rgba(25,135,84,.15);  border: 1px solid rgba(25,135,84,.35); }
+.pill.scheduled{ background: rgba(108,117,125,.15);border: 1px solid rgba(108,117,125,.35); }
 
-/* ---------- MOBILE BEHAVIOR ---------- */
-.hide-mobile { display: table-cell; }
-.show-mobile { display: none; }
+/* Desktop-only helper; mobile counterpart below */
+.desktop-only { display: table-cell; }
 
-/* Under the radios, show one-line chips of players' picks on mobile */
-.mobile-picks-list {
-  margin-top: 8px;
+/* ====== Mobile predictions strip (one line under the match) ====== */
+.mobile-picks-row { display: none; }     /* hidden on desktop */
+.predictions-strip {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 8px;
+  gap: .5rem;
+  overflow-x: auto;
+  padding: .25rem 0;
 }
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid #e5e7eb;
-  background: #f9fafb;
-  font-size: 12px;
+.mb-chip {
   white-space: nowrap;
+  border-radius: 9999px;
+  padding: .25rem .5rem;
+  font-size: .875rem;
+  background: var(--bs-gray-800, rgba(255,255,255,.06));
+  color: var(--bs-body-color, inherit);
+  border: 1px solid var(--bs-gray-700, rgba(255,255,255,.18));
+}
+.mb-name { font-weight: 600; margin-right: .25rem; }
+.mb-sep { opacity: .6; margin: 0 .2rem; }
+.pick-correct {
+  background: rgba(25, 135, 84, .15);
+  border-color: rgba(25, 135, 84, .35);
 }
 
-/* Keep result/status readable on mobile; hide the desktop user columns */
-@media (max-width: 768px){
-  .fixtures-table { min-width: 0; }         /* allow true mobile width */
-  .col-kickoff { width: 1%; }               /* still shrink-to-fit */
-  .col-match   { width: auto; }             /* let match breathe on mobile */
-  .col-user    { width: 0; }                /* not used on mobile */
+/* ====== Buttons ====== */
+.select, .btn {
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  padding: .55rem .65rem;
+}
+.btn-primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  cursor: pointer;
+}
+.btn-primary:hover { filter: brightness(1.05); }
 
-  .hide-mobile { display: none !important; }  /* hide user columns */
-  .show-mobile { display: block !important; } /* show inline chips */
+/* ====== Responsive ====== */
+@media (max-width: 768px) {
+  .table .th, .table .td { padding: .6rem .7rem; }
+  .kickoff-date { font-size: .85rem; }
+  .kickoff-time { font-size: .78rem; }
 
-  .kickoff-date { font-size: .82rem; }
-  .kickoff-time { font-size: .76rem; }
+  /* Hide desktop user columns; show one mobile picks row */
+  .desktop-only { display: none; }
+  .mobile-picks-row { display: table-row; }
 
-  /* Tighten cell padding a bit */
-  .fixtures-table .th,
-  .fixtures-table .td { padding: 8px 10px; }
+  /* Keep result & status visible */
+  .col-result, .col-status { width: 1%; }
 
-  /* Result & Status remain visible; nothing to change */
+  /* Keep "your pick" radios horizontal under the match */
+  .choice { gap: 12px; flex-wrap: nowrap; }
+
+  /* Save CTA centered */
+  .save-all-predictions-btn {
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    bottom: 16px;
+    padding: .8rem 1.25rem;
+    font-size: 1rem;
+    border-radius: 999px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  }
+
+  /* Make table horizontally scrollable if total width exceeds viewport */
+  .table-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
+
+/* Extra small phones */
+@media (max-width: 480px) {
+  .table { font-size: 13px; }
+  .table .th, .table .td { padding: .5rem .55rem; }
+  .tiny { font-size: .78rem; }
 }
