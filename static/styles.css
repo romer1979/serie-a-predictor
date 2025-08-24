@@ -1,76 +1,14 @@
+/* =========================================================
+   Base polish
+   ========================================================= */
 .table > :not(caption) > * > * { vertical-align: middle; }
 .card { border-radius: 14px; }
 .badge { letter-spacing: .2px; }
 .toast { border-radius: 12px; }
-.save-all-predictions-btn {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  z-index: 1000; /* make sure it’s above other elements */
-}
 
-/* Mobile predictions list: horizontal scroll if many users */
-.predictions-strip {
-  display: flex;
-  gap: .5rem;
-  overflow-x: auto;
-  padding-bottom: .25rem;
-}
-
-/* Pills */
-.pick-pill {
-  white-space: nowrap;
-  border-radius: 9999px;
-  padding: .25rem .5rem;
-  font-size: .875rem;
-  background: var(--bs-gray-800);
-  color: var(--bs-body-color);
-  border: 1px solid var(--bs-gray-700);
-}
-
-/* Highlight correct picks (LIVE/FT) */
-.pick-correct {
-  background: rgba(25, 135, 84, .15);  /* Bootstrap success tint */
-  border-color: rgba(25, 135, 84, .35);
-}
-
-/* Optional: make long names truncate nicely */
-.pick-name {
-  max-width: 9rem;
-  display: inline-block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: bottom;
-}
-
-/* Keep the Save button easy to reach on phones */
-.sticky-save {
-  position: sticky;
-  bottom: 0;
-  background: var(--bs-body-bg);
-  padding-top: .5rem;
-}
-
-/* ===== Leaderboard / Tables polish ===== */
 .page-header { margin: 1.5rem 0 1rem; }
 .h1 { font-size: 1.75rem; margin: 0; }
 
-.board-controls {
-  margin: .5rem 0 1rem;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 12px;
-  padding: .75rem;
-}
-.controls-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .75rem 1rem;
-  align-items: end;
-}
-.control { display: grid; gap: .35rem; min-width: 160px; }
-.control--btn { min-width: auto; }
-.label { font-size: .85rem; opacity: .85; }
 .select, .btn {
   border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.15);
@@ -86,16 +24,35 @@
 }
 .btn-primary:hover { filter: brightness(1.05); }
 
+/* =========================================================
+   “Save all” CTA (single definition used everywhere)
+   ========================================================= */
+.sticky-save {
+  position: sticky;
+  bottom: 0;
+  background: var(--bs-body-bg);
+  padding-top: .5rem;
+}
+.save-all-predictions-btn {
+  padding: .7rem 1.1rem;
+  border-radius: 999px;
+}
+
+/* =========================================================
+   Table shell
+   ========================================================= */
 .table-card {
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 14px;
-  overflow: hidden;
+  overflow: hidden;          /* enables horizontal scroll on small screens */
 }
 .table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;        /* lets colgroup widths apply */
+  font-variant-numeric: tabular-nums;
 }
 .th, .td {
   padding: .75rem .9rem;
@@ -110,171 +67,173 @@
   background: rgba(255,255,255,0.02);
 }
 
-/* Right-align numbers with tabular numerals for perfect column alignment */
-.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  -moz-font-feature-settings: "tnum";
-  -webkit-font-feature-settings: "tnum";
-  font-feature-settings: "tnum";
-}
+/* Right‑aligned numeric helper */
+.num { text-align: right; }
 
 /* Small print */
 .subtle { opacity: .8; margin: .25rem 0 1rem; }
 .footnote { opacity: .7; margin-top: 1rem; font-size: .9rem; }
 
-/* Kickoff column (use class="kickoff" on th/td for that column) */
-th.kickoff, td.kickoff {
-  width: 90px;
+/* =========================================================
+   Columns (kickoff first, status last)
+   We style by position so your template doesn’t need extra classes.
+   ========================================================= */
+
+/* Kickoff (col 1): compact, non‑wrapping, ellipsis if too narrow */
+.table thead th.th:first-child,
+.table tbody td.td:first-child {
+  width: 88px;                /* desktop default */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+/* Match (col 2): flexible, takes remaining width */
+.table thead th.th:nth-child(2),
+.table tbody td.td:nth-child(2) {
+  width: auto;
+}
+
+/* Result (penultimate col): right‑aligned */
+.table thead th.th:nth-last-child(2),
+.table tbody td.td:nth-last-child(2) {
+  text-align: right;
+  width: 92px;
+}
+
+/* Status (last col): centered, pill fits nicely */
+.table thead th.th:last-child,
+.table tbody td.td:last-child {
+  text-align: center;
+  width: 72px;
   white-space: nowrap;
 }
 
-/* “Your Pick” radios – default desktop inline */
-.choice label,
-.pick-options label {
+/* =========================================================
+   Status pills
+   ========================================================= */
+.pill {
   display: inline-block;
-  margin-right: 10px;
+  padding: .25rem .55rem;
+  border-radius: 999px;
+  font-size: .8rem;
+  line-height: 1;
+  border: 1px solid rgba(108,117,125,.35);
+  background: rgba(108,117,125,.15);
+}
+.pill.live     { background: rgba(220,53,69,.15);  border-color: rgba(220,53,69,.35); }
+.pill.finished { background: rgba(25,135,84,.15);  border-color: rgba(25,135,84,.35); }
+
+/* =========================================================
+   Prediction display chips (other users’ picks)
+   ========================================================= */
+.predictions-strip {
+  display: flex;
+  gap: .5rem;
+  overflow-x: auto;
+  padding-bottom: .25rem;
+}
+.pick-pill {
+  white-space: nowrap;
+  border-radius: 9999px;
+  padding: .25rem .5rem;
+  font-size: .875rem;
+  background: var(--bs-gray-800);
+  color: var(--bs-body-color);
+  border: 1px solid var(--bs-gray-700);
+}
+.pick-correct {
+  background: rgba(25, 135, 84, .15);
+  border-color: rgba(25, 135, 84, .35);
+}
+.pick-name {
+  max-width: 9rem;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 
-/* Responsive tweaks */
-@media (max-width: 640px) {
-  .controls-row { gap: .5rem; }
-  .control { min-width: 46%; }
-  .table .th, .table .td { padding: .6rem .7rem; }
+/* =========================================================
+   “Your Pick” radios
+   - Desktop: inline row (1 / X / 2)
+   - Mobile: stacked for easy tapping
+   ========================================================= */
+.choice { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.choice label { display: inline-flex; align-items: center; gap: 6px; }
+.choice input[type="radio"] { width: 18px; height: 18px; }
+.choice .tiny { font-size: .85rem; }
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+
+/* Medium & down – allow horizontal scroll, make columns tighter */
+@media (max-width: 992px) {
+  .table-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table thead th.th:first-child,
+  .table tbody td.td:first-child { width: 80px; font-size: .85rem; }
+  .table thead th.th:nth-last-child(2),
+  .table tbody td.td:nth-last-child(2) { width: 80px; }
+  .table thead th.th:last-child,
+  .table tbody td.td:last-child { width: 64px; }
 }
 
-/* ========================================================= */
-/* ===============  HOMEPAGE MOBILE POLISH  ================= */
-/* ========================================================= */
-
+/* Phones – stack radios vertically; sticky header; keep first two cols visible */
 @media (max-width: 768px) {
-  /* Let wide fixture tables scroll horizontally */
-  .table-card {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .table-card .table {
-    min-width: 720px;
-  }
-
-  /* Compact type + spacing for fixtures */
   .table { font-size: 14px; }
-  .table .th, .table .td { padding: .55rem .6rem; }
+  .th, .td { padding: .55rem .6rem; }
 
-  /* Kickoff column: make it slimmer on mobile */
-  th.kickoff, td.kickoff {
-    width: 72px;
-    font-size: 12px;
-  }
-
-  /* Status pills */
-  .pill { font-size: .75rem; padding: .2rem .45rem; border-radius: 999px; }
-  .pill.live     { background: rgba(220,53,69,.15);  border: 1px solid rgba(220,53,69,.35); }
-  .pill.finished { background: rgba(25,135,84,.15);  border: 1px solid rgba(25,135,84,.35); }
-  .pill.scheduled{ background: rgba(108,117,125,.15);border: 1px solid rgba(108,117,125,.35); }
-
-  /* “Your Pick” radios – stack vertically on mobile */
-  .choice,
-  .pick-options {
-    display: flex;
-    flex-direction: column;   /* vertical */
-    align-items: flex-start;
-    gap: 6px;
-  }
-  .choice .tiny,
-  .pick-options .tiny { font-size: .85rem; }
-  .choice .radio input { width: 18px; height: 18px; }
-
-  /* Buttons */
-  .btn { padding: .45rem .6rem; font-size: .95rem; }
-  .btn.tiny { padding: .3rem .5rem; font-size: .8rem; }
-
-  /* Save All Predictions CTA – centered and thumb‑friendly */
-  .save-all-predictions-btn {
-    position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
-    right: auto;
-    bottom: 16px;
-    padding: .8rem 1.25rem;
-    font-size: 1rem;
-    border-radius: 999px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.25);
-  }
-
-  /* Sticky header row while scrolling horizontally */
-  .table thead th.th {
+  .table thead th.th {                /* sticky header while scrolling horizontally */
     position: sticky;
     top: 0;
     z-index: 2;
     backdrop-filter: blur(4px);
   }
 
-  /* Keep first two columns visible while horizontal scrolling */
-  .table-card .table th.th:first-child,
-  .table-card .table td.td:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 1;
+  /* keep first two columns visible */
+  .table thead th.th:first-child,
+  .table tbody td.td:first-child {
+    position: sticky; left: 0; z-index: 1;
     background: rgba(255,255,255,0.04);
     backdrop-filter: blur(4px);
   }
-  .table-card .table th.th:nth-child(2),
-  .table-card .table td.td:nth-child(2) {
-    position: sticky;
-    left: 100px; /* match approximate width of first column */
-    z-index: 1;
+  .table thead th.th:nth-child(2),
+  .table tbody td.td:nth-child(2) {
+    position: sticky; left: 96px; z-index: 1;   /* match kickoff width + padding */
     background: rgba(255,255,255,0.04);
     backdrop-filter: blur(4px);
+  }
+
+  /* radios become vertical */
+  .choice { flex-direction: column; align-items: flex-start; gap: 6px; }
+  .btn { padding: .45rem .6rem; font-size: .95rem; }
+  .btn.tiny { padding: .3rem .5rem; font-size: .8rem; }
+
+  /* center “Save all” button; good thumb target */
+  .save-all-predictions-btn {
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    font-size: 1rem;
   }
 }
 
-/* Super small screens */
+/* Very small phones */
 @media (max-width: 480px) {
-  .table-card .table { min-width: 600px; }
   .table { font-size: 13px; }
-  .table .th, .table .td { padding: .5rem .55rem; }
-  .choice .tiny, .pick-options .tiny { font-size: .8rem; }
+  .th, .td { padding: .5rem .55rem; }
+  .choice .tiny { font-size: .8rem; }
   .tiny { font-size: .78rem; }
-}
 
-/* Kickoff column: narrower */
-.table .kickoff-col {
-  width: 30px;        /* shrink width */
-  text-align: center; /* center align date/time */
-  white-space: nowrap;
-  font-size: 0.85rem; /* slightly smaller text */
+  .table thead th.th:first-child,
+  .table tbody td.td:first-child { width: 76px; }
+  .table thead th.th:nth-last-child(2),
+  .table tbody td.td:nth-last-child(2) { width: 72px; }
+  .table thead th.th:last-child,
+  .table tbody td.td:last-child { width: 56px; }
 }
-
-/* Status column at the end */
-.table .status-col {
-  min-width: 30px;    /* small but readable */
-  text-align: center;
-  white-space: nowrap;
-}
-
-/* Mobile tweaks */
-@media (max-width: 640px) {
-  .table .kickoff-col { 
-    width: 60px; 
-    font-size: 0.75rem; 
-  }
-  .table .status-col {
-    width: 30px;
-    font-size: 0.75rem;
-  }
-}
-
-.table {
-  table-layout: fixed;   /* forces widths to be respected */
-  width: 100%;
-}
-
-.table .kickoff-col {
-  width: 60px;           /* your desired width */
-  white-space: nowrap;   /* prevent wrapping */
-  overflow: hidden;
-  text-overflow: ellipsis; /* show "…" if truncated */
-  font-size: 0.75rem;
-}
-
