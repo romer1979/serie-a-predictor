@@ -816,6 +816,70 @@ def leaderboard():
         matchday=matchday
     )
 
+@app.route("/history")
+@login_required
+def history():
+    """
+    Display historical fixtures and predictions for a given season and matchday.
+    This view allows users to browse finished matchdays.  Predictions are
+    always revealed regardless of kickoff time since the matches have
+    concluded.  If no matchday is specified, the latest completed
+    matchday for the chosen season (or current season) is used.
+    """
+    update_fixtures_adaptive()
+
+    # Available seasons and the current one.  Fall back to the last season
+    # in the list if none is marked current.
+    seasons = seasons_available()
+    current_season = current_season_from_db() or (seasons[-1] if seasons else None)
+
+    # Season and matchday come from query parameters.  If missing, use
+    # sensible defaults.  ``request.args.get`` returns ``None`` when not
+    # present; convert matchday to string to avoid type issues.
+    season = request.args.get("season") or current_season
+    matchday = request.args.get("matchday") or None
+
+    # Determine the matchday to display.  If unspecified, choose the
+    # latest completed matchday; if none are completed yet, default to
+    # the first available matchday for the season (if any).
+    if season:
+        if not matchday:
+            matchday = latest_completed_matchday(season)
+            if not matchday:
+                days = matchdays_for(season)
+                matchday = days[0] if days else None
+    else:
+        matchday = None
+
+    # Fetch fixtures for the requested season/matchday.  An empty list
+    # yields an empty table rather than an error.
+    fixtures = []
+    if season and matchday:
+        fixtures = (
+            Fixture.query
+            .filter(Fixture.season == season, Fixture.matchday == str(matchday))
+            .order_by(Fixture.match_date.asc())
+            .all()
+        )
+
+    # Build the prediction matrix.  We ignore ``user_predictions`` and
+    # ``locked`` logic because the table is read-only.  Always reveal
+    # predictions (show_flags True) for finished fixtures.
+    users_cols, pred_matrix, _ = prediction_matrix(fixtures)
+    show_flags = {f.id: True for f in fixtures}
+
+    return render_template(
+        "history.html",
+        fixtures=fixtures,
+        users_cols=users_cols,
+        pred_matrix=pred_matrix,
+        show_preds_flags=show_flags,
+        seasons=seasons,
+        season=season,
+        matchdays=matchdays_for(season) if season else [],
+        matchday=matchday
+    )
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
