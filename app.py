@@ -862,11 +862,13 @@ def history():
             .all()
         )
 
-    # Build the prediction matrix.  We ignore ``user_predictions`` and
-    # ``locked`` logic because the table is read-only.  Always reveal
-    # predictions (show_flags True) for finished fixtures.
-    users_cols, pred_matrix, _ = prediction_matrix(fixtures)
-    show_flags = {f.id: True for f in fixtures}
+    # Build the prediction matrix.  ``prediction_matrix`` returns a list of
+    # users, a prediction mapping and a set of flags indicating when
+    # predictions should be revealed.  For the history view we rely on
+    # these flags so that picks remain hidden until kickoff.  This
+    # prevents revealing predictions for future fixtures if a user
+    # navigates to a not-yet-started matchday.
+    users_cols, pred_matrix, show_flags = prediction_matrix(fixtures)
 
     return render_template(
         "history.html",
