@@ -22,19 +22,20 @@
     {% else %}
     <div class="table-card">
       <div class="table-responsive" style="overflow:auto;">
-        <table class="table table-striped" style="min-width:980px; table-layout:fixed;">
+        <!-- table-layout:auto allows kickoff column to shrink to fit content -->
+        <table class="table table-striped" style="min-width:980px; table-layout:auto;">
           <colgroup>
-            <!-- Kickoff (fit to content; nowrap) -->
-            <col class="col-kickoff">
-            <!-- Match (intentionally narrow; ellipsis) -->
-            <col class="col-match">
-            <!-- Each user column gets a narrow, equal width (desktop only) -->
+            <!-- Kickoff: width 1% tricks browser to shrink-to-fit content -->
+            <col class="col-kickoff" style="width:1%;">
+            <!-- Match (intentionally compact; rest of free space) -->
+            <col class="col-match" style="width:220px;">
+            <!-- Each user column (desktop only) gets a narrow, equal width -->
             {% for uid, uname in users_cols %}
-              <col class="col-user">
+              <col class="col-user only-desktop" style="width:54px;">
             {% endfor %}
-            <!-- Result & Status at the end (always visible) -->
-            <col class="col-result">
-            <col class="col-status">
+            <!-- Result & Status at the end -->
+            <col class="col-result" style="width:80px;">
+            <col class="col-status" style="width:70px;">
           </colgroup>
 
           <thead>
@@ -42,7 +43,9 @@
               <th class="th kickoff-col">Kickoff</th>
               <th class="th">Match</th>
               {% for uid, uname in users_cols %}
-                <th class="th th-user" title="{{ uname }}" style="text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                <th class="th only-desktop"
+                    title="{{ uname }}"
+                    style="text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                   {{ uname }}
                 </th>
               {% endfor %}
@@ -55,11 +58,11 @@
             {% for f in fixtures %}
               {% set my = user_predictions.get(f.id) %}
               {% set locked = not f.is_open_for_prediction() %}
-              {% set reveal = True %} {# if you gate visibility, replace with your real flag #}
+              {% set reveal = show_preds_flags.get(f.id) %}
               <tr>
 
                 <!-- Kickoff: two lines (date / time). JS will localize from data-utc -->
-                <td class="td kickoff">
+                <td class="td kickoff" style="white-space:nowrap;">
                   <div class="kickoff-date"
                        data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
                     <!-- filled by JS -->
@@ -69,7 +72,7 @@
 
                 <!-- Match + your ONE set of radios -->
                 <td class="td">
-                  <div class="match-title">
+                  <div class="match-title" title="{{ f.home_team }} vs {{ f.away_team }}">
                     {{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}
                   </div>
 
@@ -90,25 +93,22 @@
                     {% endif %}
                   </div>
 
-                  <!-- MOBILE-ONLY: everyone’s picks in one horizontal line below the match -->
-                  <div class="mobile-picks">
-                    {% if all_preds.get(f.id) and reveal %}
-                      {% for username, selection in all_preds.get(f.id) %}
+                  <!-- MOBILE-ONLY: all players’ picks in ONE horizontal line -->
+                  {% if reveal and preds and preds.get(f.id) %}
+                    <div class="predictions-strip only-mobile" aria-label="Players' picks">
+                      {% for uname, pick in preds[f.id].items() %}
                         <span class="pick-pill">
-                          <span class="pick-name">{{ username }}</span>:
-                          <span class="pick-val">{{ selection or '—' }}</span>
+                          <span class="pick-name">{{ uname }}</span>&nbsp;<strong>{{ pick }}</strong>
                         </span>
                       {% endfor %}
-                    {% else %}
-                      <span class="muted tiny">Picks hidden until kickoff</span>
-                    {% endif %}
-                  </div>
+                    </div>
+                  {% endif %}
                 </td>
 
-                <!-- One column per user (DESKTOP only; hidden on mobile via CSS) -->
+                <!-- DESKTOP-ONLY: one column per user -->
                 {% for uid, uname in users_cols %}
-                  {% set pick = pred_matrix.get((f.id, uid)) if pred_matrix is defined else None %}
-                  <td class="td td-user" style="text-align:center;font-variant-numeric:tabular-nums;">
+                  {% set pick = pred_matrix.get((f.id, uid)) %}
+                  <td class="td only-desktop" style="text-align:center;font-variant-numeric:tabular-nums;">
                     {% if reveal %}
                       {{ pick or '—' }}
                     {% else %}
@@ -178,23 +178,26 @@
 </script>
 
 <style>
-  /* Make kickoff fit its text (table-layout:fixed still on). */
-  .col-kickoff { width: 1%; }            /* as small as possible */
-  .col-match   { width: 230px; }         /* keep this tight */
-  .col-user    { width: 48px; }          /* compact user pick cells (desktop) */
-  .col-result  { width: 80px; }
-  .col-status  { width: 72px; }
+  /* ---------- desktop vs mobile toggles ---------- */
+  .only-mobile { display: none; }
+  .only-desktop { display: table-cell; }
 
-  /* Kickoff cell layout (two lines) */
+  @media (max-width: 768px){
+    .only-mobile { display: block; }
+    .only-desktop { display: none; }
+  }
+
+  /* ---------- kickoff column that fits content ---------- */
+  .kickoff-col { white-space: nowrap; }
   td.kickoff {
-    white-space: nowrap;                 /* keep date/time unwrapped */
-    line-height: 1.15;
     text-align: center;
+    line-height: 1.15;
+    white-space: nowrap; /* keep date/time tidy */
   }
   .kickoff-date { font-weight: 600; font-size: .86rem; }
   .kickoff-time { font-size: .8rem;  opacity: .85; }
 
-  /* Match title narrower with ellipsis */
+  /* ---------- match column compact ---------- */
   .match-title {
     font-weight: 600;
     margin-bottom: 6px;
@@ -203,13 +206,12 @@
     text-overflow: ellipsis;
   }
 
-  /* Radios: inline, compact */
+  /* ---------- radios: inline on all screens (mobile too) ---------- */
   .choice {
     display: flex;
     gap: 10px;
     align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: .5rem;
+    flex-wrap: nowrap; /* horizontal on mobile as requested */
   }
   .choice .radio {
     display: inline-flex;
@@ -217,48 +219,12 @@
     gap: 6px;
   }
 
-  /* MOBILE-ONLY horizontal picks under each match */
-  .mobile-picks {
-    display: none;                       /* hidden on desktop */
-  }
-
-  /* Pills used in mobile picks */
-  .pick-pill {
-    white-space: nowrap;
-    border-radius: 9999px;
-    padding: .25rem .5rem;
-    font-size: .875rem;
-    background: rgba(255,255,255,.06);
-    color: inherit;
-    border: 1px solid rgba(255,255,255,.15);
-  }
-  .pick-name {
-    max-width: 9rem;
-    display: inline-block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    vertical-align: bottom;
-  }
-  .pick-val { font-weight: 700; margin-left: 2px; }
-
-  /* Responsive tweaks */
+  /* keep Result & Status visible on mobile; widths stay compact */
   @media (max-width: 768px){
-    .col-kickoff { width: 1%; }          /* still fit-content on mobile */
-    .col-match   { width: 180px; }
+    .col-kickoff { width: 1%; }       /* stays shrink-to-fit */
+    .col-match   { width: 180px; }    /* compact match column */
     .col-result  { width: 68px; }
     .col-status  { width: 64px; }
-
-    /* Hide desktop user columns on mobile */
-    .th-user, .td-user { display: none; }
-
-    /* Show the mobile horizontal picks under the match cell */
-    .mobile-picks {
-      display: flex;
-      gap: .5rem;
-      overflow-x: auto;
-      padding: .25rem 0 .1rem;
-      -webkit-overflow-scrolling: touch;
-    }
 
     .kickoff-date { font-size: .82rem; }
     .kickoff-time { font-size: .76rem; }
