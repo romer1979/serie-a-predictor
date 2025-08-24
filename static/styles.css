@@ -264,3 +264,17 @@ th.kickoff, td.kickoff {
     font-size: 0.75rem;
   }
 }
+
+.table {
+  table-layout: fixed;   /* forces widths to be respected */
+  width: 100%;
+}
+
+.table .kickoff-col {
+  width: 30px;           /* your desired width */
+  white-space: nowrap;   /* prevent wrapping */
+  overflow: hidden;
+  text-overflow: ellipsis; /* show "…" if truncated */
+  font-size: 0.75rem;
+}
+
