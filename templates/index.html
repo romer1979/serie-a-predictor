@@ -30,6 +30,24 @@
 </head>
 <body class="bg-dark text-white">
 
+<!-- Primary navigation bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navBar" aria-controls="navBar" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navBar">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+        </li>
+        <!-- Additional navigation items (e.g. logout) can be inserted here -->
+      </ul>
+    </div>
+  </div>
+</nav>
+
 <div class="container my-4">
     <!-- Wrap the entire fixture list in a single form so that all radio
          buttons are submitted together.  The ``id`` and ``action``
@@ -224,5 +242,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 </script>
+    <!-- Include Bootstrap's JavaScript bundle so that the navbar toggler
+         and other interactive components work as expected.  Placing this
+         after your own scripts ensures Bootstrap is loaded but does not
+         override any application logic. -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
