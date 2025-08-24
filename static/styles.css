@@ -256,3 +256,19 @@
   }
 }
 
+/* Hide mobile picks by default, show only on small screens */
+.mobile-picks { display:none; margin-top:6px; font-size:12px; }
+.mobile-pick { display:flex; gap:4px; }
+
+@media (max-width: 768px){
+  /* Hide table user columns on mobile */
+  .col-user, th:nth-child(n+3):not(.col-result):not(.col-status),
+  td:nth-child(n+3):not(.col-result):not(.col-status) {
+    display:none;
+  }
+
+  /* Show the mobile picks under the match */
+  .mobile-picks { display:block; }
+}
+
+
