@@ -24,9 +24,9 @@
       <div class="table-responsive" style="overflow:auto;">
         <table class="table table-striped" style="min-width:980px; table-layout:fixed;">
           <colgroup>
-            <!-- Kickoff (readable on desktop, compact on mobile via CSS) -->
+            <!-- Kickoff (stack date/time; readable desktop, compact on mobile via CSS) -->
             <col class="col-kickoff">
-            <!-- Match (takes remaining flexible space) -->
+            <!-- Match (intentionally narrow; ellipsis) -->
             <col class="col-match">
             <!-- Each user column gets a narrow, equal width -->
             {% for uid, uname in users_cols %}
@@ -58,24 +58,25 @@
               {% set reveal = show_preds_flags.get(f.id) %}
               <tr>
 
-                <!-- Kickoff (short format; JS can localize) -->
-                <td class="td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                  <time class="kickoff-local"
-                        data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
-                    {{ f.match_date }}
-                  </time>
+                <!-- Kickoff: two lines (date / time). JS will localize from data-utc -->
+                <td class="td kickoff">
+                  <div class="kickoff-date"
+                       data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
+                    <!-- filled by JS -->
+                  </div>
+                  <div class="kickoff-time"><!-- filled by JS --></div>
                 </td>
 
                 <!-- Match + your ONE set of radios -->
                 <td class="td">
-                  <div class="fw-semibold" style="margin-bottom:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                  <div class="match-title">
                     {{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}
                   </div>
 
                   <!-- Radios belong to THIS form -->
-                  <div class="choice" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                  <div class="choice">
                     {% for opt,label in [('1','1'),('X','X'),('2','2')] %}
-                      <label class="radio" style="display:flex;align-items:center;gap:6px;">
+                      <label class="radio">
                         <input type="radio"
                                name="fixture_{{ f.id }}"
                                value="{{ opt }}"
@@ -144,33 +145,75 @@
 
 {% block scripts %}
 <script>
-  // Render kickoff in local time + relative (if you want)
-  function fmt(dt){
+  // Localize kickoff into two lines: Date (top) + Time (bottom)
+  function fmtDate(dt){
     const d = new Date(dt);
-    const opts = {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'};
-    return d.toLocaleString(undefined, opts);
+    // e.g., "Sat, Aug 24" (short, readable)
+    return d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
   }
-  document.querySelectorAll('.kickoff-local').forEach(el=>{
+  function fmtTime(dt){
+    const d = new Date(dt);
+    // e.g., "18:30"
+    return d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+  }
+  document.querySelectorAll('.kickoff-date').forEach(el=>{
     const iso = el.getAttribute('data-utc');
     if (!iso) return;
-    el.textContent = fmt(iso);
+    el.textContent = fmtDate(iso);
+    const timeEl = el.parentElement.querySelector('.kickoff-time');
+    if (timeEl) timeEl.textContent = fmtTime(iso);
   });
 </script>
 
 <style>
-  /* Column widths that make sense */
-  .col-kickoff { width: 120px; }   /* readable date+time */
-  .col-match   { width: auto; }    /* flex column */
-  .col-user    { width: 48px; }    /* compact user pick cells */
+  /* Column widths that make sense (match column intentionally narrower) */
+  .col-kickoff { width: 118px; }              /* room for stacked date/time */
+  .col-match   { width: 230px; }              /* ~half of typical previous width */
+  .col-user    { width: 48px; }               /* compact user pick cells */
   .col-result  { width: 80px; }
   .col-status  { width: 72px; }
 
-  /* On small screens: reduce kickoff a bit, keep table scrollable horizontally */
+  /* Kickoff cell layout */
+  td.kickoff {
+    text-align: center;
+    white-space: normal;
+    line-height: 1.15;
+  }
+  .kickoff-date { font-weight: 600; font-size: .86rem; }
+  .kickoff-time { font-size: .8rem;  opacity: .85; }
+
+  /* Match title narrower with ellipsis */
+  .match-title {
+    font-weight: 600;
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Radios: tidy inline on desktop; mobile stacks via global CSS if you kept it */
+  .choice {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .choice .radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Mobile tweaks */
   @media (max-width: 768px){
-    .col-kickoff { width: 92px; }
+    .col-kickoff { width: 96px; }
+    .col-match   { width: 180px; }           /* keep it tight on mobile */
     .col-user    { width: 44px; }
     .col-result  { width: 68px; }
     .col-status  { width: 64px; }
+
+    .kickoff-date { font-size: .82rem; }
+    .kickoff-time { font-size: .76rem; }
   }
 </style>
 {% endblock %}
