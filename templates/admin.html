@@ -1,52 +1,100 @@
-{% extends 'layout.html' %}
-{% block content %}
-  <h1 class="h3 mb-3">Admin — Invite Codes</h1>
-
-  <div class="row g-3">
-    <div class="col-lg-5">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h2 class="h5 mb-3">Create Invite</h2>
-          <form method="post">
-            <div class="input-group">
-              <input class="form-control" name="code" placeholder="e.g. WEEK1-INVITE-2025" required>
-              <button class="btn btn-primary" type="submit">Add</button>
-            </div>
-          </form>
-        </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Admin · Serie A Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-dark text-white">
+  <!-- Navigation bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarAdmin" aria-controls="navbarAdmin" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarAdmin">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('index') }}">Fixtures</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" aria-current="page" href="{{ url_for('admin') }}">Admin</a>
+          </li>
+          {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+            </li>
+          {% endif %}
+        </ul>
       </div>
     </div>
+  </nav>
 
-    <div class="col-lg-7">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h2 class="h5 mb-3">Existing Invites</h2>
-          <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-              <thead class="table-light-subtle">
-                <tr>
-                  <th>Code</th>
-                  <th>Used By</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for inv in invites %}
-                  <tr>
-                    <td class="fw-semibold">{{ inv.code }}</td>
-                    <td>
-                      {% if inv.used_by_user_id %}
-                        <span class="badge text-bg-success">Used</span>
-                      {% else %}
-                        <span class="badge text-bg-secondary">Unused</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+  <div class="container py-4">
+    <h1 class="h4 mb-4">Admin</h1>
+    <!-- Invite management -->
+    <div class="mb-4">
+      <h2 class="h5 mb-3">Invite Codes</h2>
+      <form method="post" action="{{ url_for('admin') }}" class="row g-3 align-items-center mb-3">
+        <div class="col-auto">
+          <input type="text" name="code" class="form-control" placeholder="New invite code" required>
         </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-secondary">Create</button>
+        </div>
+      </form>
+      {% if invites %}
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Code</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for invite in invites %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ invite.code }}</td>
+              <td>{% if invite.used_by_user_id %}Used{% else %}Unused{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
+      {% else %}
+        <p class="muted">No invite codes yet.</p>
+      {% endif %}
+    </div>
+
+    <!-- Maintenance actions -->
+    <div class="mb-4">
+      <h2 class="h5 mb-3">Maintenance</h2>
+      <form method="post" action="{{ url_for('admin_refresh') }}">
+        <button type="submit" class="btn btn-primary">Refresh fixtures now</button>
+      </form>
     </div>
   </div>
-{% endblock %}
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
