@@ -24,29 +24,28 @@
       <div class="table-responsive" style="overflow:auto;">
         <table class="table table-striped" style="min-width:980px; table-layout:fixed;">
           <colgroup>
-            <col style="width: 90px;">      <!-- Kickoff (narrow) -->
-            <col>                           <!-- Match -->
+            <!-- Kickoff (readable on desktop, compact on mobile via CSS) -->
+            <col class="col-kickoff">
+            <!-- Match (takes remaining flexible space) -->
+            <col class="col-match">
+            <!-- Each user column gets a narrow, equal width -->
             {% for uid, uname in users_cols %}
-              <col style="width:56px;">     <!-- each user's pick -->
+              <col class="col-user">
             {% endfor %}
-            <col style="width:90px;">       <!-- Result -->
-            <col style="width:72px;">       <!-- Status (moved to last) -->
+            <!-- Result & Status at the end -->
+            <col class="col-result">
+            <col class="col-status">
           </colgroup>
 
           <thead>
             <tr>
               <th class="th kickoff-col">Kickoff</th>
               <th class="th">Match</th>
-
-              <!-- Your single set of inputs (1/X/2) per fixture goes in the "Match" cell below.
-                   We REMOVE any second/mobile-only duplicate inputs. -->
-
               {% for uid, uname in users_cols %}
                 <th class="th" title="{{ uname }}" style="text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                   {{ uname }}
                 </th>
               {% endfor %}
-
               <th class="th" style="text-align:right;">Result</th>
               <th class="th" style="text-align:center;">Status</th>
             </tr>
@@ -59,7 +58,7 @@
               {% set reveal = show_preds_flags.get(f.id) %}
               <tr>
 
-                <!-- Kickoff (short format; JS will localize if you already added that) -->
+                <!-- Kickoff (short format; JS can localize) -->
                 <td class="td" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                   <time class="kickoff-local"
                         data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
@@ -67,9 +66,9 @@
                   </time>
                 </td>
 
-                <!-- Match + YOUR ONLY set of radios -->
+                <!-- Match + your ONE set of radios -->
                 <td class="td">
-                  <div class="fw-semibold" style="margin-bottom:6px;">
+                  <div class="fw-semibold" style="margin-bottom:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                     {{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}
                   </div>
 
@@ -91,7 +90,7 @@
                   </div>
                 </td>
 
-                <!-- One column per user: show pick (no inputs here) -->
+                <!-- One column per user: display pick when allowed -->
                 {% for uid, uname in users_cols %}
                   {% set pick = pred_matrix.get((f.id, uid)) %}
                   <td class="td" style="text-align:center;font-variant-numeric:tabular-nums;">
@@ -132,7 +131,7 @@
     </div>
     {% endif %}
 
-    <!-- Sticky Save on mobile is still inside THE SAME form -->
+    <!-- Sticky Save (inside the same form) -->
     <div class="sticky-save" style="text-align:center;margin-top:10px;">
       <button class="btn btn-primary save-all-predictions-btn" type="submit">
         💾 Save All Predictions
@@ -140,4 +139,38 @@
     </div>
 
   </form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Render kickoff in local time + relative (if you want)
+  function fmt(dt){
+    const d = new Date(dt);
+    const opts = {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'};
+    return d.toLocaleString(undefined, opts);
+  }
+  document.querySelectorAll('.kickoff-local').forEach(el=>{
+    const iso = el.getAttribute('data-utc');
+    if (!iso) return;
+    el.textContent = fmt(iso);
+  });
+</script>
+
+<style>
+  /* Column widths that make sense */
+  .col-kickoff { width: 120px; }   /* readable date+time */
+  .col-match   { width: auto; }    /* flex column */
+  .col-user    { width: 48px; }    /* compact user pick cells */
+  .col-result  { width: 80px; }
+  .col-status  { width: 72px; }
+
+  /* On small screens: reduce kickoff a bit, keep table scrollable horizontally */
+  @media (max-width: 768px){
+    .col-kickoff { width: 92px; }
+    .col-user    { width: 44px; }
+    .col-result  { width: 68px; }
+    .col-status  { width: 64px; }
+  }
+</style>
 {% endblock %}
