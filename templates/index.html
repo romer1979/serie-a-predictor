@@ -39,10 +39,15 @@
     </button>
     <div class="collapse navbar-collapse" id="navBar">
       <ul class="navbar-nav ms-auto">
-        <!-- Always show link to the leaderboard -->
+        <!-- Always show link to the leaderboard and history -->
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
         </li>
+        {% if current_user.is_authenticated %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('history') }}">History</a>
+        </li>
+        {% endif %}
         {% if current_user.is_authenticated and current_user.is_admin %}
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('admin') }}">Admin</a>
