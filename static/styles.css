@@ -240,7 +240,7 @@ th.kickoff, td.kickoff {
 
 /* Kickoff column: narrower */
 .table .kickoff-col {
-  width: 80px;        /* shrink width */
+  width: 30px;        /* shrink width */
   text-align: center; /* center align date/time */
   white-space: nowrap;
   font-size: 0.85rem; /* slightly smaller text */
@@ -248,7 +248,7 @@ th.kickoff, td.kickoff {
 
 /* Status column at the end */
 .table .status-col {
-  min-width: 90px;    /* small but readable */
+  min-width: 30px;    /* small but readable */
   text-align: center;
   white-space: nowrap;
 }
@@ -256,11 +256,11 @@ th.kickoff, td.kickoff {
 /* Mobile tweaks */
 @media (max-width: 640px) {
   .table .kickoff-col { 
-    width: 65px; 
+    width: 30px; 
     font-size: 0.75rem; 
   }
   .table .status-col {
-    width: 70px;
+    width: 30px;
     font-size: 0.75rem;
   }
 }
