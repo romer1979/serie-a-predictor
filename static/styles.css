@@ -237,3 +237,30 @@ th.kickoff, td.kickoff {
   .choice .tiny, .pick-options .tiny { font-size: .8rem; }
   .tiny { font-size: .78rem; }
 }
+
+/* Kickoff column: narrower */
+.table .kickoff-col {
+  width: 80px;        /* shrink width */
+  text-align: center; /* center align date/time */
+  white-space: nowrap;
+  font-size: 0.85rem; /* slightly smaller text */
+}
+
+/* Status column at the end */
+.table .status-col {
+  min-width: 90px;    /* small but readable */
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Mobile tweaks */
+@media (max-width: 640px) {
+  .table .kickoff-col { 
+    width: 65px; 
+    font-size: 0.75rem; 
+  }
+  .table .status-col {
+    width: 70px;
+    font-size: 0.75rem;
+  }
+}
