@@ -256,7 +256,7 @@ th.kickoff, td.kickoff {
 /* Mobile tweaks */
 @media (max-width: 640px) {
   .table .kickoff-col { 
-    width: 30px; 
+    width: 60px; 
     font-size: 0.75rem; 
   }
   .table .status-col {
@@ -271,7 +271,7 @@ th.kickoff, td.kickoff {
 }
 
 .table .kickoff-col {
-  width: 30px;           /* your desired width */
+  width: 60px;           /* your desired width */
   white-space: nowrap;   /* prevent wrapping */
   overflow: hidden;
   text-overflow: ellipsis; /* show "…" if truncated */
