@@ -128,11 +128,15 @@
                 <td class="td">
                   <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
                 </td>
-                <!-- User picks: always revealed in history -->
+                <!-- User picks: reveal only when show flag is true -->
                 {% for uid, uname in users_cols %}
                   {% set pick = pred_matrix.get((f.id, uid)) %}
                   <td class="td desktop-only text-center">
-                    <span class="desk-pick {{ 'pick-correct' if outcome and pick == outcome else '' }}">{{ pick or '—' }}</span>
+                    {% if reveal %}
+                      <span class="desk-pick {{ 'pick-correct' if outcome and pick == outcome else '' }}">{{ pick or '—' }}</span>
+                    {% else %}
+                      <span class="muted tiny">—</span>
+                    {% endif %}
                   </td>
                 {% endfor %}
                 <!-- Result -->
