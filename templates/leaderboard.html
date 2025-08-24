@@ -1,184 +1,182 @@
-{% extends "layout.html" %}
-{% block title %}Leaderboard · Serie A Predictor{% endblock %}
-
-{% block content %}
-<div class="page-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-  <h1 class="h1">Leaderboard</h1>
-</div>
-
-<form class="board-controls" method="get" action="{{ url_for('leaderboard') }}">
-  <div class="controls-row">
-    <!-- Scope -->
-    <div class="control">
-      <label class="label" for="scope">Scope</label>
-      <select id="scope" name="scope" class="select" onchange="onScopeChange(this)">
-        <option value="overall" {{ 'selected' if scope=='overall' else '' }}>Overall</option>
-        <option value="season"  {{ 'selected' if scope=='season'  else '' }}>Season</option>
-        <option value="week"    {{ 'selected' if scope=='week'    else '' }}>Matchday</option>
-      </select>
-    </div>
-
-    <!-- Season (visible for season/week) -->
-    <div class="control" id="seasonCtrl" style="display:none;">
-      <label class="label" for="season">Season</label>
-      <select id="season" name="season" class="select" onchange="this.form.submit()">
-        {% for s in seasons %}
-          <option value="{{ s }}" {{ 'selected' if season==s else '' }}>{{ s }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <!-- Matchday (visible for week) -->
-    <div class="control" id="mdCtrl" style="display:none;">
-      <label class="label" for="matchday">Matchday</label>
-      <select id="matchday" name="matchday" class="select" onchange="this.form.submit()">
-        {% for md in matchdays %}
-          <option value="{{ md }}" {{ 'selected' if matchday|string==md|string else '' }}>MD {{ md }}</option>
-        {% endfor %}
-      </select>
-    </div>
-
-    <div class="control control--btn" style="margin-left:auto;">
-      <label class="label" style="visibility:hidden;">&nbsp;</label>
-      <button class="btn btn-primary" type="submit">Update</button>
-    </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!--
+      Stand‑alone leaderboard page for the Serie A predictor.  It brings in
+      Bootstrap for responsive layout and imports the shared dark theme
+      styles from ``styles.css``.  The page preserves all the original Jinja
+      expressions so the Flask back‑end can supply data for seasons,
+      matchdays and user points.
+    -->
+    <meta charset="utf-8">
+    <title>Leaderboard · Serie A Predictor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Load the global styles from Flask when available; fall back to local path when opened directly -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+      /* Page‑local styles copied from the original template.  These rules
+         control how the leaderboard adapts between desktop and mobile
+         layouts. */
+      .hide-on-mobile { display: block; }
+      .show-on-mobile { display: none; }
+      .mobile-list { padding: .25rem .5rem; }
+      .mobile-row {
+        display: grid;
+        grid-template-columns: 40px 1fr auto;
+        align-items: center;
+        gap: .5rem;
+        padding: .6rem .4rem;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+      }
+      .mobile-row:last-child { border-bottom: 0; }
+      .mobile-row .rank { text-align: center; font-variant-numeric: tabular-nums; opacity: .8; }
+      .mobile-row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .mobile-row .pts { text-align: right; }
+      .pts-badge {
+        display: inline-block;
+        min-width: 2.5ch;
+        padding: .25rem .55rem;
+        border-radius: 9999px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.15);
+        font-variant-numeric: tabular-nums;
+      }
+      @media (max-width: 900px) {
+        .table .th, .table .td { padding: .6rem .7rem; }
+      }
+      @media (max-width: 640px) {
+        .hide-on-mobile { display: none; }
+        .show-on-mobile { display: block; }
+        .board-controls { padding: .6rem; }
+        .controls-row { gap: .5rem; }
+        .control { min-width: 48%; }
+        .control.control--btn { min-width: auto; margin-left: 0; }
+        .h4 { font-size: 1.4rem; }
+      }
+    </style>
+</head>
+<body class="bg-dark text-white">
+<div class="container my-4">
+  <!-- Page header -->
+  <div class="page-header d-flex align-items-center justify-content-between gap-3 mb-3">
+    <h1 class="h4 m-0">Leaderboard</h1>
   </div>
 
-  {% if scope == 'season' and season %}
-    <p class="subtle">Showing season totals for <strong>{{ season }}</strong>.</p>
-  {% elif scope == 'week' and season and matchday %}
-    <p class="subtle">Showing matchday <strong>{{ matchday }}</strong> · <strong>{{ season }}</strong>.</p>
-  {% elif scope == 'overall' %}
-    <p class="subtle">Showing all‑time points.</p>
-  {% endif %}
-</form>
-
-<div class="table-card">
-  <!-- Desktop / Tablet Table -->
-  <div class="table-responsive hide-on-mobile">
-    <table class="table table-striped" style="min-width:560px;">
-      <thead>
-        <tr>
-          <th class="th" style="width:64px;">#</th>
-          <th class="th">User</th>
-          <th class="th num" style="width:140px;">Points</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in users %}
-          {% set uname = (u.username if u.username is defined else u['username']) %}
-          {% set pts   = (u.points   if u.points   is defined else u['points']) %}
-          <tr>
-            <td class="td num">{{ loop.index }}</td>
-            <td class="td">{{ uname }}</td>
-            <td class="td num"><strong>{{ pts }}</strong></td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Mobile Compact List (no horizontal scroll) -->
-  <div class="mobile-list show-on-mobile" role="list">
-    {% for u in users %}
-      {% set uname = (u.username if u.username is defined else u['username']) %}
-      {% set pts   = (u.points   if u.points   is defined else u['points']) %}
-      <div class="mobile-row" role="listitem">
-        <div class="cell rank">{{ loop.index }}</div>
-        <div class="cell name" title="{{ uname }}">{{ uname }}</div>
-        <div class="cell pts">
-          <span class="pts-badge">{{ pts }}</span>
-        </div>
+  <!-- Controls form -->
+  <form class="board-controls mb-3" method="get" action="{{ url_for('leaderboard') }}">
+    <div class="controls-row d-flex flex-wrap gap-3">
+      <!-- Scope selector -->
+      <div class="control">
+        <label class="label" for="scope">Scope</label>
+        <select id="scope" name="scope" class="select form-select" onchange="onScopeChange(this)">
+          <option value="overall" {{ 'selected' if scope=='overall' else '' }}>Overall</option>
+          <option value="season"  {{ 'selected' if scope=='season'  else '' }}>Season</option>
+          <option value="week"    {{ 'selected' if scope=='week'    else '' }}>Matchday</option>
+        </select>
       </div>
-    {% endfor %}
+      <!-- Season control (shown for season/week scopes) -->
+      <div class="control" id="seasonCtrl" style="display:none;">
+        <label class="label" for="season">Season</label>
+        <select id="season" name="season" class="select form-select" onchange="this.form.submit()">
+          {% for s in seasons %}
+            <option value="{{ s }}" {{ 'selected' if season==s else '' }}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <!-- Matchday control (shown for week scope) -->
+      <div class="control" id="mdCtrl" style="display:none;">
+        <label class="label" for="matchday">Matchday</label>
+        <select id="matchday" name="matchday" class="select form-select" onchange="this.form.submit()">
+          {% for md in matchdays %}
+            <option value="{{ md }}" {{ 'selected' if matchday|string==md|string else '' }}>MD {{ md }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <!-- Submit button -->
+      <div class="control control--btn ms-auto">
+        <label class="label" style="visibility:hidden;">&nbsp;</label>
+        <button class="btn btn-primary" type="submit">Update</button>
+      </div>
+    </div>
+
+    <!-- Context information depending on scope -->
+    {% if scope == 'season' and season %}
+      <p class="subtle mt-2">Showing season totals for <strong>{{ season }}</strong>.</p>
+    {% elif scope == 'week' and season and matchday %}
+      <p class="subtle mt-2">Showing matchday <strong>{{ matchday }}</strong> · <strong>{{ season }}</strong>.</p>
+    {% elif scope == 'overall' %}
+      <p class="subtle mt-2">Showing all‑time points.</p>
+    {% endif %}
+  </form>
+
+  <!-- Leaderboard table -->
+  <div class="table-card">
+    <!-- Desktop/tablet view: scrollable table -->
+    <div class="table-responsive hide-on-mobile">
+      <table class="table table-striped" style="min-width:560px;">
+        <thead>
+          <tr>
+            <th class="th" style="width:64px;">#</th>
+            <th class="th">User</th>
+            <th class="th num" style="width:140px;">Points</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+            {% set uname = (u.username if u.username is defined else u['username']) %}
+            {% set pts   = (u.points   if u.points   is defined else u['points']) %}
+            <tr>
+              <td class="td num">{{ loop.index }}</td>
+              <td class="td">{{ uname }}</td>
+              <td class="td num"><strong>{{ pts }}</strong></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <!-- Mobile view: compact list without horizontal scroll -->
+    <div class="mobile-list show-on-mobile" role="list">
+      {% for u in users %}
+        {% set uname = (u.username if u.username is defined else u['username']) %}
+        {% set pts   = (u.points   if u.points   is defined else u['points']) %}
+        <div class="mobile-row" role="listitem">
+          <div class="cell rank">{{ loop.index }}</div>
+          <div class="cell name" title="{{ uname }}">{{ uname }}</div>
+          <div class="cell pts"><span class="pts-badge">{{ pts }}</span></div>
+        </div>
+      {% endfor %}
+    </div>
   </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
+<!-- Bootstrap JS for interactive components (optional) -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+  // Replicate the original control toggling logic: hide/show season and matchday
+  // selectors based on the selected scope, and auto‑submit when the scope
+  // changes for snappy UX.
   function toggleControls() {
     const scope = document.getElementById('scope')?.value || 'overall';
     const seasonCtrl = document.getElementById('seasonCtrl');
     const mdCtrl = document.getElementById('mdCtrl');
     if (!seasonCtrl || !mdCtrl) return;
-
     if (scope === 'overall') {
       seasonCtrl.style.display = 'none';
       mdCtrl.style.display = 'none';
     } else if (scope === 'season') {
       seasonCtrl.style.display = '';
       mdCtrl.style.display = 'none';
-    } else { // week
+    } else {
       seasonCtrl.style.display = '';
       mdCtrl.style.display = '';
     }
   }
-  function onScopeChange(sel){
+  function onScopeChange(sel) {
     toggleControls();
-    // Submit immediately when changing scope for snappy UX
     sel.form.submit();
   }
   document.addEventListener('DOMContentLoaded', toggleControls);
 </script>
-
-<style>
-  /* Page-local styles that complement your global styles.css */
-
-  /* Hide/show blocks depending on viewport */
-  .hide-on-mobile { display: block; }
-  .show-on-mobile { display: none; }
-
-  /* Mobile list styling */
-  .mobile-list { padding: .25rem .5rem; }
-  .mobile-row {
-    display: grid;
-    grid-template-columns: 40px 1fr auto;
-    align-items: center;
-    gap: .5rem;
-    padding: .6rem .4rem;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-  }
-  .mobile-row:last-child { border-bottom: 0; }
-
-  .mobile-row .rank {
-    text-align: center;
-    font-variant-numeric: tabular-nums;
-    opacity: .8;
-  }
-  .mobile-row .name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .mobile-row .pts {
-    text-align: right;
-  }
-  .pts-badge {
-    display: inline-block;
-    min-width: 2.5ch;
-    padding: .25rem .55rem;
-    border-radius: 9999px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.15);
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* Slightly denser table for better fit on small laptops */
-  @media (max-width: 900px) {
-    .table .th, .table .td { padding: .6rem .7rem; }
-  }
-
-  /* Phone layout: switch to compact list with no horizontal scroll */
-  @media (max-width: 640px) {
-    .hide-on-mobile { display: none; }
-    .show-on-mobile { display: block; }
-
-    .board-controls { padding: .6rem; }
-    .controls-row { gap: .5rem; }
-    .control { min-width: 48%; }
-    .control.control--btn { min-width: auto; margin-left: 0; }
-    .h1 { font-size: 1.4rem; }
-  }
-</style>
-{% endblock %}
+</body>
+</html>
