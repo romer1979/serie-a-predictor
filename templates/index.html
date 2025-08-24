@@ -19,9 +19,8 @@
       <table class="table table-striped fixtures-table">
         <thead>
           <tr>
-            <th class="th" style="min-width:180px;">Kickoff</th>
+            <th class="th" style="min-width:80px;">Kickoff</th>
             <th class="th">Match</th>
-            <th class="th" style="width:86px;">Status</th>
             <th class="th" style="min-width:160px;">Your Pick</th>
             {% for uid, uname in users_cols %}
               <th class="th user-col" title="{{ uname }}">{{ uname }}</th>
@@ -29,6 +28,7 @@
             <th class="th num" style="width:78px;">Result</th>
             <!-- Mobile-only toggle column -->
             <th class="th picks-toggle-col">👥</th>
+            <th class="th" style="width:86px;">Status</th>
           </tr>
         </thead>
 
@@ -40,10 +40,10 @@
             <tr class="fixture-row" data-fixture="{{ f.id }}">
               <!-- Kickoff -->
               <td class="td">
-                <div class="fw-semibold kickoff-local" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
+                <div class="fw-semibold -local" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
                   {{ f.match_date }}
                 </div>
-                <div class="tiny subtle kickoff-rel"></div>
+                <div class="tiny subtle -rel"></div>
               </td>
 
               <!-- Match -->
