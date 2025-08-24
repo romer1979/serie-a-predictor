@@ -21,12 +21,12 @@
           <tr>
             <th class="th" style="min-width:86px;">Kickoff</th>
             <th class="th">Match</th>
-             <th class="th" style="width:40px;">Status</th>
-            <th class="th" style="min-width:86px;">Your Pick</th>
+             <th class="th" style="width:30px;">Status</th>
+            <th class="th" style="min-width:30px;">Your Pick</th>
             {% for uid, uname in users_cols %}
               <th class="th user-col" title="{{ uname }}">{{ uname }}</th>
             {% endfor %}
-            <th class="th num" style="width:78px;">Result</th>
+            <th class="th num" style="width:30px;">Result</th>
             <!-- Mobile-only toggle column -->
             <th class="th picks-toggle-col">👥</th>
           </tr>
