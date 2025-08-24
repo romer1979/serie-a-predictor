@@ -24,15 +24,15 @@
       <div class="table-responsive" style="overflow:auto;">
         <table class="table table-striped" style="min-width:980px; table-layout:fixed;">
           <colgroup>
-            <!-- Kickoff (stack date/time; readable desktop, compact on mobile via CSS) -->
+            <!-- Kickoff (fit to content; nowrap) -->
             <col class="col-kickoff">
-            <!-- Match (intentionally narrower; ellipsis) -->
+            <!-- Match (intentionally narrow; ellipsis) -->
             <col class="col-match">
-            <!-- Each user column gets a narrow, equal width -->
+            <!-- Each user column gets a narrow, equal width (desktop only) -->
             {% for uid, uname in users_cols %}
               <col class="col-user">
             {% endfor %}
-            <!-- Result & Status at the end -->
+            <!-- Result & Status at the end (always visible) -->
             <col class="col-result">
             <col class="col-status">
           </colgroup>
@@ -42,7 +42,7 @@
               <th class="th kickoff-col">Kickoff</th>
               <th class="th">Match</th>
               {% for uid, uname in users_cols %}
-                <th class="th user-col" title="{{ uname }}" style="text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                <th class="th th-user" title="{{ uname }}" style="text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                   {{ uname }}
                 </th>
               {% endfor %}
@@ -55,7 +55,7 @@
             {% for f in fixtures %}
               {% set my = user_predictions.get(f.id) %}
               {% set locked = not f.is_open_for_prediction() %}
-              {% set reveal = show_preds_flags.get(f.id) %}
+              {% set reveal = True %} {# if you gate visibility, replace with your real flag #}
               <tr>
 
                 <!-- Kickoff: two lines (date / time). JS will localize from data-utc -->
@@ -90,30 +90,25 @@
                     {% endif %}
                   </div>
 
-                  <!-- ===== MOBILE PICKS (shown only on mobile) ===== -->
+                  <!-- MOBILE-ONLY: everyone’s picks in one horizontal line below the match -->
                   <div class="mobile-picks">
-                    {% for uid, uname in users_cols %}
-                      {% set pick = pred_matrix.get((f.id, uid)) %}
-                      <div class="mobile-pick">
-                        <span class="uname">{{ uname }}:</span>
-                        <span class="pick">
-                          {% if reveal %}
-                            {{ pick or '—' }}
-                          {% else %}
-                            <span class="muted tiny">—</span>
-                          {% endif %}
+                    {% if all_preds.get(f.id) and reveal %}
+                      {% for username, selection in all_preds.get(f.id) %}
+                        <span class="pick-pill">
+                          <span class="pick-name">{{ username }}</span>:
+                          <span class="pick-val">{{ selection or '—' }}</span>
                         </span>
-                      </div>
-                    {% endfor %}
+                      {% endfor %}
+                    {% else %}
+                      <span class="muted tiny">Picks hidden until kickoff</span>
+                    {% endif %}
                   </div>
-                  <!-- ============================================== -->
-
                 </td>
 
-                <!-- One column per user: display pick when allowed (hidden on mobile) -->
+                <!-- One column per user (DESKTOP only; hidden on mobile via CSS) -->
                 {% for uid, uname in users_cols %}
-                  {% set pick = pred_matrix.get((f.id, uid)) %}
-                  <td class="td user-col" style="text-align:center;font-variant-numeric:tabular-nums;">
+                  {% set pick = pred_matrix.get((f.id, uid)) if pred_matrix is defined else None %}
+                  <td class="td td-user" style="text-align:center;font-variant-numeric:tabular-nums;">
                     {% if reveal %}
                       {{ pick or '—' }}
                     {% else %}
@@ -167,12 +162,10 @@
   // Localize kickoff into two lines: Date (top) + Time (bottom)
   function fmtDate(dt){
     const d = new Date(dt);
-    // e.g., "Sat, Aug 24"
     return d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
   }
   function fmtTime(dt){
     const d = new Date(dt);
-    // e.g., "18:30"
     return d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
   }
   document.querySelectorAll('.kickoff-date').forEach(el=>{
@@ -185,18 +178,18 @@
 </script>
 
 <style>
-  /* Column widths that make sense (match column intentionally narrower) */
-  .col-kickoff { width: 118px; }              /* room for stacked date/time */
-  .col-match   { width: 230px; }              /* tighter than before */
-  .col-user    { width: 48px; }               /* compact user pick cells */
+  /* Make kickoff fit its text (table-layout:fixed still on). */
+  .col-kickoff { width: 1%; }            /* as small as possible */
+  .col-match   { width: 230px; }         /* keep this tight */
+  .col-user    { width: 48px; }          /* compact user pick cells (desktop) */
   .col-result  { width: 80px; }
   .col-status  { width: 72px; }
 
-  /* Kickoff cell layout */
+  /* Kickoff cell layout (two lines) */
   td.kickoff {
-    text-align: center;
-    white-space: normal;
+    white-space: nowrap;                 /* keep date/time unwrapped */
     line-height: 1.15;
+    text-align: center;
   }
   .kickoff-date { font-weight: 600; font-size: .86rem; }
   .kickoff-time { font-size: .8rem;  opacity: .85; }
@@ -210,12 +203,13 @@
     text-overflow: ellipsis;
   }
 
-  /* Radios: tidy inline on desktop; keep horizontal on mobile too */
+  /* Radios: inline, compact */
   .choice {
     display: flex;
     gap: 10px;
     align-items: center;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    margin-bottom: .5rem;
   }
   .choice .radio {
     display: inline-flex;
@@ -223,27 +217,51 @@
     gap: 6px;
   }
 
-  /* MOBILE PICKS (hidden on desktop) */
-  .mobile-picks { display:none; margin-top:6px; font-size:12px; }
-  .mobile-pick  { display:flex; gap:4px; line-height:1.2; }
-  .mobile-pick .uname { opacity:.9; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* MOBILE-ONLY horizontal picks under each match */
+  .mobile-picks {
+    display: none;                       /* hidden on desktop */
+  }
 
-  /* Mobile tweaks */
+  /* Pills used in mobile picks */
+  .pick-pill {
+    white-space: nowrap;
+    border-radius: 9999px;
+    padding: .25rem .5rem;
+    font-size: .875rem;
+    background: rgba(255,255,255,.06);
+    color: inherit;
+    border: 1px solid rgba(255,255,255,.15);
+  }
+  .pick-name {
+    max-width: 9rem;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+  }
+  .pick-val { font-weight: 700; margin-left: 2px; }
+
+  /* Responsive tweaks */
   @media (max-width: 768px){
-    .col-kickoff { width: 96px; }
+    .col-kickoff { width: 1%; }          /* still fit-content on mobile */
     .col-match   { width: 180px; }
-    .col-user    { width: 44px; }
     .col-result  { width: 68px; }
     .col-status  { width: 64px; }
 
+    /* Hide desktop user columns on mobile */
+    .th-user, .td-user { display: none; }
+
+    /* Show the mobile horizontal picks under the match cell */
+    .mobile-picks {
+      display: flex;
+      gap: .5rem;
+      overflow-x: auto;
+      padding: .25rem 0 .1rem;
+      -webkit-overflow-scrolling: touch;
+    }
+
     .kickoff-date { font-size: .82rem; }
     .kickoff-time { font-size: .76rem; }
-
-    /* Hide the per-user columns and show mobile picks instead */
-    .user-col,
-    td.user-col { display:none; }
-
-    .mobile-picks { display:block; }
   }
 </style>
 {% endblock %}
