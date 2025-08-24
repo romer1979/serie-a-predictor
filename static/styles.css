@@ -3,12 +3,45 @@
 .badge { letter-spacing: .2px; }
 .toast { border-radius: 12px; }
 
-/* Save button */
-.save-all-predictions-btn {
-  position: fixed;
-  bottom: 20px;
-  left: 20px;
-  z-index: 1000;
+/*
+ * --------------------------------------------------------------------------
+ * Global dark theme and basic typographic defaults.
+ *
+ * The original template relied on Bootstrap being available via the parent
+ * layout, but this standalone version is served directly and therefore
+ * defines its own base colours.  We choose a dark background with light
+ * foreground text to reflect the look of popular sports dashboards.  These
+ * styles apply to the entire document; if you already load Bootstrap or
+ * another framework they will coexist without conflict.
+ */
+body {
+  background-color: #0d1117;
+  color: #f8f9fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
+}
+
+/* Link colours on dark backgrounds */
+a { color: #58a6ff; text-decoration: none; }
+a:hover, a:focus { color: #79c0ff; text-decoration: underline; }
+
+/* Muted helper (matches Bootstrap's ``text-muted`` semantics). */
+.muted {
+  color: #8b949e;
+  opacity: 0.8;
+}
+
+/* Semi‑bold helper; Bootstrap defines ``fw-semibold`` but when the
+   library is not present we fall back to this. */
+.fw-semibold { font-weight: 600; }
+
+/* Hide the sticky container by default.  On small screens it will be
+   displayed and positioned fixed via the media query below. */
+.sticky-save {
+  display: none;
 }
 
 /* ====== Generic table polish ====== */
@@ -35,6 +68,65 @@
 }
 .table-striped tbody tr:nth-child(odd) .td {
   background: rgba(255,255,255,0.02);
+}
+
+/*
+ * Override Bootstrap's light table styles when rendering inside a dark
+ * ``.table-card``.  Without these rules the table header and striped rows
+ * inherit a white background from Bootstrap, which looks jarring on a
+ * dark page.  We scope the overrides to descendants of ``.table-card`` so
+ * that regular Bootstrap tables elsewhere in the project remain untouched.
+ */
+.table-card .table thead th {
+  background-color: rgba(255,255,255,0.04) !important;
+  color: inherit;
+}
+.table-card .table tbody td {
+  background-color: transparent;
+  color: inherit;
+}
+.table-card .table-striped tbody tr:nth-of-type(odd) > td {
+  background-color: rgba(255,255,255,0.02);
+}
+.table-card .table-striped tbody tr:nth-of-type(even) > td {
+  background-color: transparent;
+}
+
+/*
+ * Bootstrap defines a set of CSS variables to control table colours.  For a
+ * dark table we override them inside our ``.table-card`` so that the
+ * table body and alternating rows are transparent and lightly tinted
+ * instead of white.  This avoids the need for multiple !important rules
+ * throughout the stylesheet.
+ */
+.table-card .table {
+  --bs-table-bg: transparent;
+  --bs-table-striped-bg: rgba(255,255,255,0.02);
+  --bs-table-striped-color: inherit;
+  --bs-table-color: inherit;
+  --bs-table-hover-bg: rgba(255,255,255,0.04);
+  --bs-table-hover-color: inherit;
+  --bs-table-border-color: rgba(255,255,255,0.08);
+}
+
+/*
+ * As a final guard against Bootstrap's light table styles we apply
+ * explicit background and colour overrides to the table headings and
+ * cells.  The ``!important`` flag is used sparingly here to ensure
+ * these colours win over Bootstrap’s selectors, which are very
+ * specific.  Without these rules the header and rows would still
+ * inherit the default white backgrounds.
+ */
+.table-card table.table > thead > tr > th,
+.table-card table.table > tbody > tr > td {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+.table-card table.table > thead > tr > th {
+  background-color: rgba(255,255,255,0.04) !important;
+}
+.table-card table.table > tbody > tr:nth-child(odd) > td {
+  background-color: rgba(255,255,255,0.02) !important;
 }
 
 /* Numbers align */
@@ -81,6 +173,12 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   flex-wrap: nowrap;
 }
 .choice .radio { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Colour the native radio inputs with the primary accent when supported */
+.choice .radio input[type="radio"] {
+  /* Use the same colour as the primary button to tie the UI together */
+  accent-color: #2563eb;
+}
 
 /* Status pills */
 .pill { font-size: .8rem; padding: .25rem .5rem; border-radius: 999px; white-space: nowrap; }
@@ -147,19 +245,32 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   /* Keep "your pick" radios horizontal under the match */
   .choice { gap: 12px; flex-wrap: nowrap; }
 
-  /* Save CTA centered */
-  .save-all-predictions-btn {
+  /*
+   * On mobile devices we hide the per‑user columns and show the
+   * horizontally scrollable strip instead.  We also surface the
+   * sticky save bar: it floats at the bottom of the screen and
+   * centres the call‑to‑action within it.
+   */
+  .sticky-save {
+    display: block;
+    position: fixed;
     left: 50%;
     transform: translateX(-50%);
-    right: auto;
     bottom: 16px;
+    width: auto;
+    z-index: 1000;
+    text-align: center;
+  }
+  .sticky-save .save-all-predictions-btn {
     padding: .8rem 1.25rem;
     font-size: 1rem;
     border-radius: 999px;
     box-shadow: 0 8px 24px rgba(0,0,0,.25);
   }
 
-  /* Make table horizontally scrollable if total width exceeds viewport */
+  /* Make table horizontally scrollable if the combined width exceeds the
+     viewport.  ``-webkit-overflow-scrolling: touch`` enables smooth
+     momentum scrolling on iOS. */
   .table-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }
 
