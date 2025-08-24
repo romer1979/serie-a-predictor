@@ -1,274 +1,135 @@
-/* =========================================================
-   Base polish
-   ========================================================= */
-.table > :not(caption) > * > * { vertical-align: middle; }
-.card { border-radius: 14px; }
-.badge { letter-spacing: .2px; }
-.toast { border-radius: 12px; }
+/* ---------- Base table sizing ---------- */
 
-.page-header { margin: 1.5rem 0 1rem; }
-.h1 { font-size: 1.75rem; margin: 0; }
-
-.select, .btn {
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.06);
-  color: inherit;
-  padding: .55rem .65rem;
-}
-.btn-primary {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-  cursor: pointer;
-}
-.btn-primary:hover { filter: brightness(1.05); }
-
-/* =========================================================
-   “Save all” CTA (single definition used everywhere)
-   ========================================================= */
-.sticky-save {
-  position: sticky;
-  bottom: 0;
-  background: var(--bs-body-bg);
-  padding-top: .5rem;
-}
-.save-all-predictions-btn {
-  padding: .7rem 1.1rem;
-  border-radius: 999px;
-}
-
-/* =========================================================
-   Table shell
-   ========================================================= */
-.table-card {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  overflow: hidden;          /* enables horizontal scroll on small screens */
-}
-.table {
+/* Let content drive column sizing better than full fixed layout */
+.fixtures-table {
+  min-width: 980px;
+  table-layout: fixed;
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  table-layout: fixed;        /* lets colgroup widths apply */
-  font-variant-numeric: tabular-nums;
 }
+
+/* Column widths */
+.col-kickoff { width: 92px; }   /* tight but readable for two lines */
+.col-match   { width: 220px; }  /* intentionally narrower */
+.col-user    { width: 56px; }   /* compact player columns */
+.col-result  { width: 86px; }
+.col-status  { width: 78px; }
+
+/* Cells */
 .th, .td {
-  padding: .75rem .9rem;
-  text-align: left;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 10px 12px;
+  vertical-align: middle;
 }
-.table thead .th {
+
+.td-result { text-align: right; font-variant-numeric: tabular-nums; }
+.td-status { text-align: center; }
+
+/* Kickoff cell layout */
+td.kickoff {
+  text-align: center;
+  white-space: normal;
+  line-height: 1.15;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.kickoff-date { font-weight: 600; font-size: .86rem; }
+.kickoff-time { font-size: .8rem;  opacity: .85; }
+
+/* Match title narrower with ellipsis */
+.match-title {
   font-weight: 600;
-  background: rgba(255,255,255,0.04);
-}
-.table-striped tbody tr:nth-child(odd) .td {
-  background: rgba(255,255,255,0.02);
-}
-
-/* Right‑aligned numeric helper */
-.num { text-align: right; }
-
-/* Small print */
-.subtle { opacity: .8; margin: .25rem 0 1rem; }
-.footnote { opacity: .7; margin-top: 1rem; font-size: .9rem; }
-
-/* =========================================================
-   Columns (kickoff first, status last)
-   We style by position so your template doesn’t need extra classes.
-   ========================================================= */
-
-/* Kickoff (col 1): compact, non‑wrapping, ellipsis if too narrow */
-.table thead th.th:first-child,
-.table tbody td.td:first-child {
-  width: 88px;                /* desktop default */
+  margin-bottom: 6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Choice radios stay inline */
+.choice {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.choice .radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Desktop-only user cells */
+.user-col,
+.user-col-td {
   text-align: center;
-  font-size: 0.9rem;
-}
-
-/* Match (col 2): flexible, takes remaining width */
-.table thead th.th:nth-child(2),
-.table tbody td.td:nth-child(2) {
-  width: auto;
-}
-
-/* Result (penultimate col): right‑aligned */
-.table thead th.th:nth-last-child(2),
-.table tbody td.td:nth-last-child(2) {
-  text-align: right;
-  width: 92px;
-}
-
-/* Status (last col): centered, pill fits nicely */
-.table thead th.th:last-child,
-.table tbody td.td:last-child {
-  text-align: center;
-  width: 72px;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-/* =========================================================
-   Status pills
-   ========================================================= */
+/* Pills */
 .pill {
   display: inline-block;
-  padding: .25rem .55rem;
+  padding: 3px 8px;
   border-radius: 999px;
-  font-size: .8rem;
-  line-height: 1;
-  border: 1px solid rgba(108,117,125,.35);
-  background: rgba(108,117,125,.15);
+  font-size: 12px;
+  font-weight: 600;
 }
-.pill.live     { background: rgba(220,53,69,.15);  border-color: rgba(220,53,69,.35); }
-.pill.finished { background: rgba(25,135,84,.15);  border-color: rgba(25,135,84,.35); }
+.pill.live { background: #fff1e6; color: #b44; }
+.pill.finished { background: #eaf7ea; color: #1b6b1b; }
+.pill.scheduled { background: #eef1f7; color: #445; }
 
-/* =========================================================
-   Prediction display chips (other users’ picks)
-   ========================================================= */
-.predictions-strip {
-  display: flex;
-  gap: .5rem;
-  overflow-x: auto;
-  padding-bottom: .25rem;
-}
-.pick-pill {
-  white-space: nowrap;
-  border-radius: 9999px;
-  padding: .25rem .5rem;
-  font-size: .875rem;
-  background: var(--bs-gray-800);
-  color: var(--bs-body-color);
-  border: 1px solid var(--bs-gray-700);
-}
-.pick-correct {
-  background: rgba(25, 135, 84, .15);
-  border-color: rgba(25, 135, 84, .35);
-}
-.pick-name {
-  max-width: 9rem;
-  display: inline-block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: bottom;
+/* ---------- Mobile behaviour ---------- */
+.mobile-picks-row {
+  display: none;                 /* hidden on desktop */
 }
 
-/* =========================================================
-   “Your Pick” radios
-   - Desktop: inline row (1 / X / 2)
-   - Mobile: stacked for easy tapping
-   ========================================================= */
-.choice { display: inline-flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.choice label { display: inline-flex; align-items: center; gap: 6px; }
-.choice input[type="radio"] { width: 18px; height: 18px; }
-.choice .tiny { font-size: .85rem; }
-
-/* =========================================================
-   Responsive
-   ========================================================= */
-
-/* Medium & down – allow horizontal scroll, make columns tighter */
-@media (max-width: 992px) {
-  .table-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .table thead th.th:first-child,
-  .table tbody td.td:first-child { width: 80px; font-size: .85rem; }
-  .table thead th.th:nth-last-child(2),
-  .table tbody td.td:nth-last-child(2) { width: 80px; }
-  .table thead th.th:last-child,
-  .table tbody td.td:last-child { width: 64px; }
-}
-
-/* Phones – stack radios vertically; sticky header; keep first two cols visible */
-@media (max-width: 768px) {
-  .table { font-size: 14px; }
-  .th, .td { padding: .55rem .6rem; }
-
-  .table thead th.th {                /* sticky header while scrolling horizontally */
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    backdrop-filter: blur(4px);
-  }
-
-  /* keep first two columns visible */
-  .table thead th.th:first-child,
-  .table tbody td.td:first-child {
-    position: sticky; left: 0; z-index: 1;
-    background: rgba(255,255,255,0.04);
-    backdrop-filter: blur(4px);
-  }
-  .table thead th.th:nth-child(2),
-  .table tbody td.td:nth-child(2) {
-    position: sticky; left: 96px; z-index: 1;   /* match kickoff width + padding */
-    background: rgba(255,255,255,0.04);
-    backdrop-filter: blur(4px);
-  }
-
-  /* radios become vertical */
-  .choice { flex-direction: column; align-items: flex-start; gap: 6px; }
-  .btn { padding: .45rem .6rem; font-size: .95rem; }
-  .btn.tiny { padding: .3rem .5rem; font-size: .8rem; }
-
-  /* center “Save all” button; good thumb target */
-  .save-all-predictions-btn {
-    position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 16px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.25);
-    font-size: 1rem;
-  }
-}
-
-/* Very small phones */
-@media (max-width: 480px) {
-  .table { font-size: 13px; }
-  .th, .td { padding: .5rem .55rem; }
-  .choice .tiny { font-size: .8rem; }
-  .tiny { font-size: .78rem; }
-
-  .table thead th.th:first-child,
-  .table tbody td.td:first-child { width: 76px; }
-  .table thead th.th:nth-last-child(2),
-  .table tbody td.td:nth-last-child(2) { width: 72px; }
-  .table thead th.th:last-child,
-  .table tbody td.td:last-child { width: 56px; }
-}
-
-/* Mobile: keep picks horizontal under the Match cell */
-@media (max-width: 768px) {
-  td .choice {
-    display: flex;
-    flex-direction: row !important; /* override any column rule */
-    align-items: center;
-    gap: 10px;
-    flex-wrap: nowrap;              /* keep 1 / X / 2 on one line */
-  }
-  td .choice .radio input {
-    width: 18px;
-    height: 18px;
-  }
-  td .choice .tiny {
-    font-size: .85rem;
-  }
-}
-
-/* Hide mobile picks by default, show only on small screens */
-.mobile-picks { display:none; margin-top:6px; font-size:12px; }
-.mobile-pick { display:flex; gap:4px; }
-
+/* Keep result/status visible on mobile; hide per-user columns */
 @media (max-width: 768px){
-  /* Hide table user columns on mobile */
-  .col-user, th:nth-child(n+3):not(.col-result):not(.col-status),
-  td:nth-child(n+3):not(.col-result):not(.col-status) {
-    display:none;
+  /* Make the kickoff column as tight as possible on small screens */
+  .col-kickoff { width: 84px; }     /* compact; fits two lines like "Sat, Aug 24" + "18:30" */
+  .col-match   { width: 200px; }
+  .col-user    { width: 0; }
+
+  /* Hide the per-user columns entirely on mobile */
+  .user-col,
+  .user-col-td {
+    display: none;
   }
 
-  /* Show the mobile picks under the match */
-  .mobile-picks { display:block; }
+  /* Show the consolidated picks row under each match */
+  .mobile-picks-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    overflow-x: auto;           /* one horizontal line; scroll if long */
+    padding-bottom: 2px;        /* space for scrollbar if any */
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+
+  /* Small, inline chips like "Alice: 1" */
+  .pick-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid rgba(0,0,0,.08);
+  }
+  .pick-1 { background: #eaf7ea; }
+  .pick-x { background: #f5f5f5; }
+  .pick-2 { background: #ffeef0; }
+
+  /* Slightly smaller kickoff text on mobile */
+  .kickoff-date { font-size: .82rem; }
+  .kickoff-time { font-size: .76rem; }
+
+  /* Keep radios nicely inline on narrow screens too */
+  .choice {
+    gap: 12px;
+    flex-wrap: nowrap;
+  }
 }
 
-
+/* ---------- Tiny helpers (existing theme likely has these) ---------- */
+.tiny { font-size: 12px; }
+.muted { color: #6b7280; }
+.fw-semibold { font-weight: 600; }
