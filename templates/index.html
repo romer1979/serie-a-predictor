@@ -6,126 +6,127 @@
     <h1 style="margin:0;font-size:20px;">
       {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
     </h1>
+
+    <!-- One global form to save all open picks -->
     <form method="post" action="{{ url_for('save_all_predictions') }}">
       <button class="btn btn-primary" type="submit" style="padding:10px 18px;">💾 Save All Predictions</button>
     </form>
   </div>
 
   {% if fixtures|length == 0 %}
-    <div class="card">No fixtures available for this matchday. Check back soon!</div>
+    <div class="card">No fixtures to show. Check back soon!</div>
   {% else %}
   <div class="table-card">
-    <!-- One form for all fixture radios -->
-    <form method="post" action="{{ url_for('save_all_predictions') }}">
-      <div class="table-responsive" style="overflow:auto;">
+    <div class="table-responsive" style="overflow:auto;">
+      <form method="post" action="{{ url_for('save_all_predictions') }}">
         <table class="table table-striped" style="min-width:980px;">
           <thead>
             <tr>
               <th class="th" style="min-width:180px;">Kickoff (local)</th>
               <th class="th">Match</th>
-              <th class="th" style="width:100px;">Status</th>
-              <th class="th" style="min-width:230px;">Your Pick</th>
+              <th class="th" style="width:90px;">Status</th>
+              <th class="th" style="min-width:180px;text-align:center;">Your Pick</th>
               {% for uid, uname in users_cols %}
-                <th class="th" title="{{ uname }}" style="text-align:center;white-space:nowrap;">
-                  {{ uname }}
-                </th>
+                <th class="th" title="{{ uname }}" style="text-align:center;white-space:nowrap;">{{ uname }}</th>
               {% endfor %}
-              <th class="th" style="width:110px;text-align:right;">Result</th>
+              <th class="th" style="width:90px;text-align:right;">Result</th>
             </tr>
           </thead>
 
           <tbody>
-            {% for f in fixtures %}
-              {% set my = user_predictions.get(f.id) %}
-              {% set locked = not f.is_open_for_prediction() %}
-              {% set reveal = show_preds_flags.get(f.id) %}
-              {% set expected = f.outcome_code() %}
-              <tr>
-                <!-- Kickoff -->
-                <td class="td">
-                  <div>
-                    <time class="kickoff-local"
-                          data-utc="{{ f.match_date|utc_iso }}">
-                      {{ f.match_date }}
-                    </time>
-                  </div>
-                  <div class="tiny subtle kickoff-rel"></div>
-                </td>
+          {% for f in fixtures %}
+            {% set my = user_predictions.get(f.id) %}
+            {% set locked = not f.is_open_for_prediction() %}
+            {% set reveal = show_preds_flags.get(f.id) %}
+            {% set outcome = f.outcome_code() %}
+            <tr>
+              <!-- Kickoff (local) + relative -->
+              <td class="td">
+                <div>
+                  <time class="kickoff-local"
+                        data-utc="{{ f.match_date|utc_iso }}">
+                    {{ f.match_date }}
+                  </time>
+                </div>
+                <div class="tiny subtle kickoff-rel"></div>
+              </td>
 
-                <!-- Match -->
-                <td class="td">
-                  <div class="fw-semibold">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
-                  <div class="tiny muted">Matchday {{ f.matchday or '—' }}</div>
-                </td>
+              <!-- Match teams -->
+              <td class="td">
+                <div class="fw-semibold">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+                <div class="tiny muted">MD {{ f.matchday or '—' }}</div>
+              </td>
 
-                <!-- Status -->
-                <td class="td">
-                  {% if f.status in ['IN_PLAY','PAUSED'] %}
-                    <span class="pill live">LIVE</span>
-                  {% elif f.status == 'FINISHED' %}
-                    <span class="pill finished">FT</span>
-                  {% elif f.status in ['SCHEDULED','TIMED'] %}
-                    <span class="pill scheduled">TIMED</span>
+              <!-- Status -->
+              <td class="td">
+                {% set s = f.display_status() if f.display_status is defined else (
+                     'LIVE' if f.status in ['IN_PLAY','PAUSED']
+                     else ('FT' if f.status == 'FINISHED' else 'TIMED')
+                   )
+                %}
+                <span class="pill
+                            {% if s == 'LIVE' %} live
+                            {% elif s == 'FT' %} finished
+                            {% else %} scheduled
+                            {% endif %}">
+                  {{ s }}
+                </span>
+              </td>
+
+              <!-- Your pick (radio only; saved by the top button) -->
+              <td class="td" style="text-align:center;">
+                <div class="choice" style="display:flex; gap:10px; justify-content:center;">
+                  {% for opt,label in [('1','1'),('X','X'),('2','2')] %}
+                    <label class="radio" style="text-align:center; cursor: {% if locked %}not-allowed{% else %}pointer{% endif %};">
+                      <input type="radio"
+                             name="fixture_{{ f.id }}"
+                             value="{{ opt }}"
+                             {% if my and my.selection == opt %}checked{% endif %}
+                             {% if locked %}disabled{% endif %}>
+                      <span class="tiny">{{ label }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+                {% if locked and f.status != 'FINISHED' %}
+                  <div class="tiny muted" style="margin-top:.25rem;">Locked</div>
+                {% endif %}
+              </td>
+
+              <!-- One column per user: show when allowed; tint correct picks LIVE/FT -->
+              {% for uid, uname in users_cols %}
+                {% set pick = pred_matrix.get((f.id, uid)) %}
+                {% set correct = (outcome is not none and pick == outcome and reveal) %}
+                <td class="td"
+                    style="text-align:center;font-variant-numeric:tabular-nums;">
+                  {% if reveal %}
+                    <span class="pick-pill {% if correct %}pick-correct{% endif %}">
+                      {{ pick or '—' }}
+                    </span>
                   {% else %}
-                    <span class="pill">{{ f.status }}</span>
+                    <span class="muted tiny">—</span>
                   {% endif %}
                 </td>
+              {% endfor %}
 
-                <!-- Your pick (radios only; saved via the top/bottom Save button) -->
-                <td class="td">
-                  <div class="choice" style="display:flex; gap:12px; justify-content:center;">
-                    {% for opt,label in [('1','1'),('X','X'),('2','2')] %}
-                      <label class="radio" style="text-align:center;">
-                        <input
-                          type="radio"
-                          name="fixture_{{ f.id }}"
-                          value="{{ opt }}"
-                          {% if my and my.selection == opt %}checked{% endif %}
-                          {% if locked %}disabled{% endif %}
-                        >
-                        <span class="tiny">{{ label }}</span>
-                      </label>
-                    {% endfor %}
-                    {% if locked and f.status != 'FINISHED' %}
-                      <span class="tiny muted">Locked</span>
-                    {% endif %}
-                  </div>
-                </td>
-
-                <!-- One column per user: show pick when allowed; highlight correct -->
-                {% for uid, uname in users_cols %}
-                  {% set pick = pred_matrix.get((f.id, uid)) %}
-                  {% set is_correct = expected and pick and (pick == expected) %}
-                  <td class="td" style="text-align:center;font-variant-numeric:tabular-nums;">
-                    {% if reveal %}
-                      <span class="pick-pill {% if is_correct %}pick-correct{% endif %}">
-                        {{ pick or '—' }}
-                      </span>
-                    {% else %}
-                      <span class="muted tiny">—</span>
-                    {% endif %}
-                  </td>
-                {% endfor %}
-
-                <!-- Result -->
-                <td class="td" style="text-align:right;font-variant-numeric:tabular-nums;">
-                  {% if f.home_score is not none and f.away_score is not none %}
-                    <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
-                  {% else %}
-                    <span class="muted">—</span>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
+              <!-- Result -->
+              <td class="td num">
+                {% if f.home_score is not none and f.away_score is not none %}
+                  <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
+                {% else %}
+                  <span class="muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
           </tbody>
         </table>
-      </div>
 
-      <!-- Sticky Save on mobile; inline on desktop -->
-      <div class="sticky-save" style="display:flex;justify-content:flex-end;margin-top:.5rem;">
-        <button class="btn btn-primary" type="submit">💾 Save All Predictions</button>
-      </div>
-    </form>
+        <!-- Secondary Save button at bottom (handy if table is long on desktop) -->
+        <div class="sticky-save" style="display:flex;justify-content:flex-end;margin-top:.5rem;">
+          <button class="btn btn-primary" type="submit">💾 Save All Predictions</button>
+        </div>
+      </form>
+    </div>
   </div>
   {% endif %}
 {% endblock %}
@@ -140,11 +141,13 @@
   }
   function rel(dt){
     const d = new Date(dt);
-    const diff = d - new Date();
-    const mins = Math.round(Math.abs(diff)/60000);
-    if (mins < 60) return (diff>0?'in ':'') + mins + ' min' + (mins!==1?'s':'') + (diff<0?' ago':'');
+    const diffMs = d - new Date();
+    const mins = Math.round(Math.abs(diffMs)/60000);
+    if (mins < 60) {
+      return (diffMs>0?'in ':'') + mins + ' min' + (mins!==1?'s':'') + (diffMs<0?' ago':'');
+    }
     const hrs = Math.round(mins/60);
-    return (diff>0?'in ':'') + hrs + ' hour' + (hrs!==1?'s':'') + (diff<0?' ago':'');
+    return (diffMs>0?'in ':'') + hrs + ' hour' + (hrs!==1?'s':'') + (diffMs<0?' ago':'');
   }
   document.querySelectorAll('.kickoff-local').forEach(el=>{
     const iso = el.getAttribute('data-utc');
@@ -153,5 +156,8 @@
     const relEl = el.parentElement.nextElementSibling;
     if (relEl && relEl.classList.contains('kickoff-rel')) relEl.textContent = rel(iso);
   });
+
+  // If a radio gets disabled via CSS pointer cues on mobile, ensure it's actually disabled
+  // (already handled by server via 'locked'; this is just visual polish)
 </script>
 {% endblock %}
