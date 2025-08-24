@@ -1,40 +1,29 @@
-/* ---------- Base table sizing ---------- */
-
-/* Let content drive column sizing better than full fixed layout */
+/* --- Table sizing & columns --- */
 .fixtures-table {
-  min-width: 980px;
-  table-layout: fixed;
   width: 100%;
+  table-layout: fixed; /* stable layout */
+  min-width: 980px;    /* keep desktop comfortable; mobile scrolls */
 }
 
-/* Column widths */
-.col-kickoff { width: 92px; }   /* tight but readable for two lines */
-.col-match   { width: 220px; }  /* intentionally narrower */
-.col-user    { width: 56px; }   /* compact player columns */
-.col-result  { width: 86px; }
-.col-status  { width: 78px; }
-
-/* Cells */
-.th, .td {
-  padding: 10px 12px;
-  vertical-align: middle;
-}
-
-.td-result { text-align: right; font-variant-numeric: tabular-nums; }
-.td-status { text-align: center; }
-
-/* Kickoff cell layout */
+/* Kickoff should shrink to content */
+.col-kickoff { width: 1%; }      /* lets it collapse to min needed */
 td.kickoff {
+  white-space: nowrap;           /* date+time won’t cause wide column */
   text-align: center;
-  white-space: normal;
   line-height: 1.15;
-  padding-left: 8px;
-  padding-right: 8px;
 }
 .kickoff-date { font-weight: 600; font-size: .86rem; }
 .kickoff-time { font-size: .8rem;  opacity: .85; }
 
-/* Match title narrower with ellipsis */
+/* Match column narrower (as requested) */
+.col-match { width: 220px; }
+
+/* User columns (desktop only) */
+.col-user   { width: 48px; }
+.col-result { width: 80px; }
+.col-status { width: 72px; }
+
+/* Titles & radios */
 .match-title {
   font-weight: 600;
   margin-bottom: 6px;
@@ -42,13 +31,11 @@ td.kickoff {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* Choice radios stay inline */
 .choice {
   display: flex;
   gap: 10px;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 .choice .radio {
   display: inline-flex;
@@ -56,80 +43,50 @@ td.kickoff {
   gap: 6px;
 }
 
-/* Desktop-only user cells */
-.user-col,
-.user-col-td {
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+/* Mobile picks row: one horizontal line, scrollable if long */
+.mobile-picks {
+  margin-top: 6px;
+  display: none;                 /* hidden by default (desktop) */
+  gap: 8px;
+  overflow-x: auto;
   white-space: nowrap;
+  padding-bottom: 2px;           /* space for scroll thumb */
 }
-
-/* Pills */
-.pill {
+.pill-pick {
   display: inline-block;
   padding: 3px 8px;
   border-radius: 999px;
   font-size: 12px;
-  font-weight: 600;
-}
-.pill.live { background: #fff1e6; color: #b44; }
-.pill.finished { background: #eaf7ea; color: #1b6b1b; }
-.pill.scheduled { background: #eef1f7; color: #445; }
-
-/* ---------- Mobile behaviour ---------- */
-.mobile-picks-row {
-  display: none;                 /* hidden on desktop */
+  line-height: 1;
+  background: var(--chip-bg, #f1f3f5);
+  color: var(--chip-fg, #333);
+  border: 1px solid rgba(0,0,0,.06);
 }
 
-/* Keep result/status visible on mobile; hide per-user columns */
+/* Pills for status (existing palette assumed) */
+.pill { display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; }
+.pill.live { background:#ffe8cc; color:#b95; }
+.pill.finished { background:#e6fcf5; color:#0b8e6b; }
+.pill.scheduled { background:#f1f3f5; color:#555; }
+
+/* Desktop/Mobile visibility helpers */
+.desktop-only { display: table-cell; }
+.mobile-only  { display: none; }
+
+/* --- Mobile tweaks --- */
 @media (max-width: 768px){
-  /* Make the kickoff column as tight as possible on small screens */
-  .col-kickoff { width: 84px; }     /* compact; fits two lines like "Sat, Aug 24" + "18:30" */
-  .col-match   { width: 200px; }
-  .col-user    { width: 0; }
+  .fixtures-table { min-width: 640px; } /* allow horizontal scroll */
+  .col-match   { width: 180px; }
+  .col-result  { width: 68px; }
+  .col-status  { width: 64px; }
 
-  /* Hide the per-user columns entirely on mobile */
-  .user-col,
-  .user-col-td {
-    display: none;
-  }
-
-  /* Show the consolidated picks row under each match */
-  .mobile-picks-row {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-    overflow-x: auto;           /* one horizontal line; scroll if long */
-    padding-bottom: 2px;        /* space for scrollbar if any */
-    -webkit-overflow-scrolling: touch;
-    white-space: nowrap;
-  }
-
-  /* Small, inline chips like "Alice: 1" */
-  .pick-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 12px;
-    border: 1px solid rgba(0,0,0,.08);
-  }
-  .pick-1 { background: #eaf7ea; }
-  .pick-x { background: #f5f5f5; }
-  .pick-2 { background: #ffeef0; }
-
-  /* Slightly smaller kickoff text on mobile */
   .kickoff-date { font-size: .82rem; }
   .kickoff-time { font-size: .76rem; }
 
-  /* Keep radios nicely inline on narrow screens too */
-  .choice {
-    gap: 12px;
-    flex-wrap: nowrap;
-  }
-}
+  /* Hide per-user columns on mobile */
+  .desktop-only { display: none !important; }
 
-/* ---------- Tiny helpers (existing theme likely has these) ---------- */
-.tiny { font-size: 12px; }
-.muted { color: #6b7280; }
-.fw-semibold { font-weight: 600; }
+  /* Show the inline, single-line “all players’ picks” under each match */
+  .mobile-only  { display: block !important; }
+  .mobile-picks { display: flex; }
+}
