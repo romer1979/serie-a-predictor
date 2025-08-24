@@ -19,16 +19,16 @@
       <table class="table table-striped fixtures-table">
         <thead>
           <tr>
-            <th class="th" style="min-width:80px;">Kickoff</th>
+            <th class="th" style="min-width:86px;">Kickoff</th>
             <th class="th">Match</th>
-            <th class="th" style="min-width:160px;">Your Pick</th>
+             <th class="th" style="width:86px;">Status</th>
+            <th class="th" style="min-width:86px;">Your Pick</th>
             {% for uid, uname in users_cols %}
               <th class="th user-col" title="{{ uname }}">{{ uname }}</th>
             {% endfor %}
             <th class="th num" style="width:78px;">Result</th>
             <!-- Mobile-only toggle column -->
             <th class="th picks-toggle-col">👥</th>
-            <th class="th" style="width:86px;">Status</th>
           </tr>
         </thead>
 
