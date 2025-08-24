@@ -1,176 +1,228 @@
-{% extends "layout.html" %}
-{% block title %}Fixtures · Serie A Predictor{% endblock %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!--
+      This is a self‑contained fixtures page for the Serie A predictor.  It uses
+      Bootstrap for sensible defaults and layout helpers and pairs it with
+      custom styles defined in ``styles.css`` to achieve a clean, dark‑themed
+      look on both desktop and mobile devices.  The page remains fully
+      compatible with the existing Flask/Jinja back‑end: Jinja expressions
+      (wrapped in ``{{ … }}`` and ``{% … %}``) are left intact so the
+      application can supply dynamic content at run time.  When opened
+      directly as a static HTML file the Jinja tags will simply be displayed
+      verbatim, but within the Flask app they will evaluate as intended.
+    -->
+    <meta charset="utf-8">
+    <title>{{ season or 'Season' }} — Matchday {{ matchday or '—' }} · Serie A Predictor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Bootstrap CSS from a CDN.  Using a CDN avoids bundling the library
+         ourselves and ensures the page looks polished even if the parent
+         layout does not provide Bootstrap.  If your project already loads
+         Bootstrap elsewhere you can remove this link to avoid duplication. -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <!-- Custom application styles.  When served through Flask the first
+         ``url_for`` call will expand to ``/static/styles.css``.  When opened
+         directly as a file the second relative link will load the CSS from
+         the current directory instead.  Including both ensures the page
+         styles correctly in both contexts. -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-dark text-white">
 
-{% block content %}
-  <!-- Whole page is a single form so the radios submit together -->
-  <form id="save-all" action="{{ url_for('save_all_predictions') }}" method="post" style="margin:0;">
+<div class="container my-4">
+    <!-- Wrap the entire fixture list in a single form so that all radio
+         buttons are submitted together.  The ``id`` and ``action``
+         attributes mirror the original template for compatibility. -->
+    <form id="save-all" action="{{ url_for('save_all_predictions') }}" method="post" class="w-100">
 
-    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-      <h1 style="margin:0;font-size:20px;">
-        {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
-      </h1>
-      <button class="btn btn-primary" type="submit" style="padding:10px 18px;">💾 Save All Predictions</button>
-    </div>
+        <!-- Page header: season & matchday label on the left and a primary
+             save button on the right.  On mobile the two elements stack
+             naturally thanks to the ``flex-column`` class. -->
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3 gap-3">
+            <h1 class="h4 m-0">
+                {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
+            </h1>
+            <button class="btn btn-primary" type="submit">💾 Save All Predictions</button>
+        </div>
 
-    {% if fixtures|length == 0 %}
-      <div class="card">No fixtures for this matchday. Check back soon!</div>
-    {% else %}
-    <div class="table-card">
-      <div class="table-responsive">
-        <!-- Use table-layout:auto so the Kickoff column can size to its content -->
-        <table class="table table-striped fixtures-table">
-          <colgroup>
-            <col class="col-kickoff"><!-- content-width -->
-            <col class="col-match"><!-- flexible -->
-            {% for uid, uname in users_cols %}
-              <col class="col-user desktop-only"><!-- narrow desktop-only user cols -->
-            {% endfor %}
-            <col class="col-result">
-            <col class="col-status">
-          </colgroup>
+        {# When there are no fixtures we show a friendly message inside a card. #}
+        {% if fixtures|length == 0 %}
+          <div class="card table-card p-4 text-center">No fixtures for this matchday. Check back soon!</div>
+        {% else %}
+        <!-- The main fixtures table.  ``table-responsive`` ensures horizontal
+             scrolling on small screens without breaking the layout.  Column
+             widths are controlled via CSS (see ``styles.css``) but the
+             colgroup remains for semantic clarity. -->
+        <div class="table-card">
+            <div class="table-responsive">
+                <table class="table table-striped fixtures-table align-middle mb-0">
+                    <colgroup>
+                        <col class="col-kickoff">
+                        <col class="col-match">
+                        {% for uid, uname in users_cols %}
+                          <col class="col-user desktop-only">
+                        {% endfor %}
+                        <col class="col-result">
+                        <col class="col-status">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th class="th kickoff-col text-center">Kickoff</th>
+                            <th class="th">Match</th>
+                            {% for uid, uname in users_cols %}
+                              <th class="th desktop-only text-center" title="{{ uname }}">{{ uname }}</th>
+                            {% endfor %}
+                            <th class="th text-end">Result</th>
+                            <th class="th text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for f in fixtures %}
+                          {# Prepare some helpers for each fixture. #}
+                          {% set my = user_predictions.get(f.id) %}
+                          {% set locked = not f.is_open_for_prediction() %}
+                          {% set reveal = show_preds_flags.get(f.id) %}
+                          {% if f.home_score is not none and f.away_score is not none %}
+                            {% set outcome = '1' if f.home_score > f.away_score else ('2' if f.away_score > f.home_score else 'X') %}
+                          {% else %}
+                            {% set outcome = None %}
+                          {% endif %}
 
-          <thead>
-            <tr>
-              <th class="th kickoff-col">Kickoff</th>
-              <th class="th">Match</th>
-              {% for uid, uname in users_cols %}
-                <th class="th desktop-only" title="{{ uname }}" style="text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                  {{ uname }}
-                </th>
-              {% endfor %}
-              <th class="th" style="text-align:right;">Result</th>
-              <th class="th" style="text-align:center;">Status</th>
-            </tr>
-          </thead>
+                          <!-- Main row visible on both desktop and mobile.  It contains
+                               kickoff information, the match name and your pick, the
+                               other users’ picks (hidden on mobile), the result and the
+                               match status. -->
+                          <tr>
+                            <!-- Kickoff: the date/time is populated client‑side using
+                                 JavaScript.  We render an ISO UTC timestamp on the
+                                 ``data-utc`` attribute and let the browser format it. -->
+                            <td class="td kickoff text-center">
+                              <div class="kickoff-date" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}"></div>
+                              <div class="kickoff-time"></div>
+                            </td>
 
-          <tbody>
-            {% for f in fixtures %}
-              {% set my = user_predictions.get(f.id) %}
-              {% set locked = not f.is_open_for_prediction() %}
-              {% set reveal = show_preds_flags.get(f.id) %}
-              {% if f.home_score is not none and f.away_score is not none %}
-                {% set outcome = '1' if f.home_score > f.away_score else ('2' if f.away_score > f.home_score else 'X') %}
-              {% else %}
-                {% set outcome = None %}
-              {% endif %}
+                            <!-- Match name and your prediction.  The radio buttons are
+                                 arranged horizontally and disabled when the fixture is
+                                 locked. -->
+                            <td class="td">
+                              <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+                              <div class="choice">
+                                {% for opt, label in [('1','1'),('X','X'),('2','2')] %}
+                                  <label class="radio form-check-inline">
+                                    <input type="radio"
+                                           name="fixture_{{ f.id }}"
+                                           value="{{ opt }}"
+                                           {% if my and my.selection == opt %}checked{% endif %}
+                                           {% if locked %}disabled{% endif %}>
+                                    <span class="tiny">{{ label }}</span>
+                                  </label>
+                                {% endfor %}
+                                {% if locked and f.status != 'FINISHED' %}
+                                  <span class="tiny muted">Locked</span>
+                                {% endif %}
+                              </div>
+                            </td>
 
-              <!-- MAIN ROW (desktop + mobile) -->
-              <tr>
-                <!-- Kickoff: date on top, time below -->
-                <td class="td kickoff">
-                  <div class="kickoff-date"
-                       data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}"></div>
-                  <div class="kickoff-time"></div>
-                </td>
+                            <!-- One column per user (visible only on larger screens). -->
+                            {% for uid, uname in users_cols %}
+                              {% set pick = pred_matrix.get((f.id, uid)) %}
+                              <td class="td desktop-only text-center">
+                                {% if reveal %}
+                                  <span class="desk-pick {{ 'pick-correct' if outcome and pick == outcome else '' }}">{{ pick or '—' }}</span>
+                                {% else %}
+                                  <span class="muted tiny">—</span>
+                                {% endif %}
+                              </td>
+                            {% endfor %}
 
-                <!-- Match + your radios -->
-                <td class="td">
-                  <div class="match-title">
-                    {{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}
-                  </div>
-                  <div class="choice">
-                    {% for opt,label in [('1','1'),('X','X'),('2','2')] %}
-                      <label class="radio">
-                        <input type="radio"
-                               name="fixture_{{ f.id }}"
-                               value="{{ opt }}"
-                               {% if my and my.selection == opt %}checked{% endif %}
-                               {% if locked %}disabled{% endif %}>
-                        <span class="tiny">{{ label }}</span>
-                      </label>
-                    {% endfor %}
-                    {% if locked and f.status != 'FINISHED' %}
-                      <span class="tiny muted">Locked</span>
-                    {% endif %}
-                  </div>
-                </td>
+                            <!-- Result column.  Show a dash if the result is unknown. -->
+                            <td class="td text-end">
+                              {% if f.home_score is not none and f.away_score is not none %}
+                                <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
+                              {% else %}
+                                <span class="muted">—</span>
+                              {% endif %}
+                            </td>
 
-                <!-- One column per user (DESKTOP ONLY) -->
-                {% for uid, uname in users_cols %}
-                  {% set pick = pred_matrix.get((f.id, uid)) %}
-                  <td class="td desktop-only" style="text-align:center;font-variant-numeric:tabular-nums;">
-                    {% if reveal %}
-                      <span class="desk-pick {{ 'pick-correct' if outcome and pick == outcome else '' }}">{{ pick or '—' }}</span>
-                    {% else %}
-                      <span class="muted tiny">—</span>
-                    {% endif %}
-                  </td>
-                {% endfor %}
+                            <!-- Status column: apply a colour coded pill based on the
+                                 return value of ``display_status``. -->
+                            <td class="td text-center">
+                              {% set s = f.display_status() %}
+                              <span class="pill
+                                          {% if s == 'LIVE' %} live
+                                          {% elif s == 'FT' %} finished
+                                          {% else %} scheduled
+                                          {% endif %}">{{ s }}</span>
+                            </td>
+                          </tr>
 
-                <!-- Result -->
-                <td class="td" style="text-align:right;font-variant-numeric:tabular-nums;">
-                  {% if f.home_score is not none and f.away_score is not none %}
-                    <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
-                  {% else %}
-                    <span class="muted">—</span>
-                  {% endif %}
-                </td>
+                          <!-- Mobile only row: show all players’ picks in a single
+                               horizontally scrollable strip underneath the main row. -->
+                          <tr class="mobile-picks-row">
+                            <td class="td" colspan="{{ 2 + users_cols|length + 2 }}">
+                              {% if reveal %}
+                                <div class="predictions-strip">
+                                  {% for uid, uname in users_cols %}
+                                    {% set pick = pred_matrix.get((f.id, uid)) %}
+                                    <span class="mb-chip {{ 'pick-correct' if outcome and pick == outcome else '' }}">
+                                      <span class="mb-name">{{ uname }}</span>
+                                      <span class="mb-sep">:</span>
+                                      <span class="mb-pick">{{ pick or '—' }}</span>
+                                    </span>
+                                  {% endfor %}
+                                </div>
+                              {% else %}
+                                <div class="tiny muted">Predictions hidden until kickoff.</div>
+                              {% endif %}
+                            </td>
+                          </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
 
-                <!-- Status LAST -->
-                <td class="td" style="text-align:center;">
-                  {% set s = f.display_status() %}
-                  <span class="pill
-                              {% if s == 'LIVE' %} live
-                              {% elif s == 'FT' %} finished
-                              {% else %} scheduled
-                              {% endif %}">
-                    {{ s }}
-                  </span>
-                </td>
-              </tr>
+        <!-- Sticky save button.  On mobile it floats above the bottom of
+             the screen; on desktop it sits inline.  See ``styles.css`` for
+             placement details. -->
+        <div class="sticky-save text-center mt-3">
+          <button class="btn btn-primary save-all-predictions-btn" type="submit">💾 Save All Predictions</button>
+        </div>
+    </form>
+</div>
 
-              <!-- MOBILE-ONLY PICKS ROW (one line with all players) -->
-              <tr class="mobile-picks-row">
-                <!-- span all columns: kickoff + match + users + result + status -->
-                <td class="td" colspan="{{ 2 + users_cols|length + 2 }}">
-                  {% if reveal %}
-                    <div class="predictions-strip">
-                      {% for uid, uname in users_cols %}
-                        {% set pick = pred_matrix.get((f.id, uid)) %}
-                        <span class="mb-chip {{ 'pick-correct' if outcome and pick == outcome else '' }}">
-                          <span class="mb-name">{{ uname }}</span>
-                          <span class="mb-sep">:</span>
-                          <span class="mb-pick">{{ pick or '—' }}</span>
-                        </span>
-                      {% endfor %}
-                    </div>
-                  {% else %}
-                    <div class="tiny muted">Predictions hidden until kickoff.</div>
-                  {% endif %}
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    {% endif %}
-
-    <!-- Sticky Save (inside the same form) -->
-    <div class="sticky-save" style="text-align:center;margin-top:10px;">
-      <button class="btn btn-primary save-all-predictions-btn" type="submit">💾 Save All Predictions</button>
-    </div>
-
-  </form>
-{% endblock %}
-
-{% block scripts %}
+<!-- Load Bootstrap’s JS bundle from the CDN.  This adds interactive
+     behaviours (collapse, dropdowns, etc.) should you choose to use them.  It
+     is deferred until the bottom of the page to avoid blocking rendering. -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-  // Localize kickoff into two lines: Date (top) + Time (bottom)
-  function fmtDate(dt){
-    const d = new Date(dt);
-    return d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
-  }
-  function fmtTime(dt){
-    const d = new Date(dt);
-    return d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
-  }
-  document.querySelectorAll('.kickoff-date').forEach(el=>{
+// Localise each kickoff into two lines: date (top) + time (bottom).
+// These helper functions produce a short, locale‑aware representation
+// without forcing a specific timezone; the browser will pick the user’s
+// preferred locale.  You can customise the format or use your own
+// localisation library if desired.
+function fmtDate (iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function fmtTime (iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+// When the DOM is ready, iterate over all kickoff date elements and set
+// their contents based on the ``data-utc`` attribute.  This runs both
+// when served statically and via Flask.
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.kickoff-date').forEach(el => {
     const iso = el.getAttribute('data-utc');
     if (!iso) return;
     el.textContent = fmtDate(iso);
     const timeEl = el.parentElement.querySelector('.kickoff-time');
     if (timeEl) timeEl.textContent = fmtTime(iso);
   });
+});
 </script>
-{% endblock %}
+</body>
+</html>
