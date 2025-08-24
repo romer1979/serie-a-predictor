@@ -237,3 +237,22 @@
   .table thead th.th:last-child,
   .table tbody td.td:last-child { width: 56px; }
 }
+
+/* Mobile: keep picks horizontal under the Match cell */
+@media (max-width: 768px) {
+  td .choice {
+    display: flex;
+    flex-direction: row !important; /* override any column rule */
+    align-items: center;
+    gap: 10px;
+    flex-wrap: nowrap;              /* keep 1 / X / 2 on one line */
+  }
+  td .choice .radio input {
+    width: 18px;
+    height: 18px;
+  }
+  td .choice .tiny {
+    font-size: .85rem;
+  }
+}
+
