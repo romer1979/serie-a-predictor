@@ -3,35 +3,38 @@
 
 {% block content %}
 
-  <!-- One single form wraps the WHOLE fixtures table -->
+  <!-- Whole table lives in one form -->
   <form id="save-all" action="{{ url_for('save_all_predictions') }}" method="post" style="margin:0;">
 
     <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-      <h1 style="margin:0;font-size:20px;">
-        {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
-      </h1>
-
-      <button class="btn btn-primary" type="submit" style="padding:10px 18px;">
-        💾 Save All Predictions
-      </button>
+      <h1 style="margin:0;font-size:20px;">Upcoming Fixtures</h1>
+      <button class="btn btn-primary" type="submit" style="padding:10px 18px;">💾 Save All Predictions</button>
     </div>
 
     {% if fixtures|length == 0 %}
-      <div class="card">No fixtures for this matchday. Check back soon!</div>
+      <div class="card">No fixtures to show. Check back soon!</div>
     {% else %}
     <div class="table-card">
       <div class="table-responsive" style="overflow:auto;">
         <table class="table table-striped fixtures-table">
           <colgroup>
-            <!-- Kickoff (stack date/time; compact) -->
             <col class="col-kickoff">
-            <!-- Match (intentionally narrower) -->
             <col class="col-match">
-            <!-- Each user column gets a narrow, equal width (desktop only) -->
-            {% for uid, uname in users_cols %}
-              <col class="col-user">
-            {% endfor %}
-            <!-- Result & Status at the end -->
+            <!-- Desktop-only user columns -->
+            {% if all_preds %}
+              {# derive a stable list of usernames from all_preds #}
+              {% set usernames = [] %}
+              {% for _, pairs in all_preds.items() %}
+                {% for uname, _sel in pairs %}
+                  {% if uname not in usernames %}
+                    {% set _ = usernames.append(uname) %}
+                  {% endif %}
+                {% endfor %}
+              {% endfor %}
+              {% for _ in usernames %}
+                <col class="col-user hide-mobile">
+              {% endfor %}
+            {% endif %}
             <col class="col-result">
             <col class="col-status">
           </colgroup>
@@ -40,11 +43,15 @@
             <tr>
               <th class="th kickoff-col">Kickoff</th>
               <th class="th">Match</th>
-              {% for uid, uname in users_cols %}
-                <th class="th user-col" title="{{ uname }}">
-                  {{ uname }}
-                </th>
-              {% endfor %}
+
+              {% if usernames %}
+                {% for uname in usernames %}
+                  <th class="th hide-mobile" title="{{ uname }}" style="text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    {{ uname }}
+                  </th>
+                {% endfor %}
+              {% endif %}
+
               <th class="th" style="text-align:right;">Result</th>
               <th class="th" style="text-align:center;">Status</th>
             </tr>
@@ -54,24 +61,23 @@
             {% for f in fixtures %}
               {% set my = user_predictions.get(f.id) %}
               {% set locked = not f.is_open_for_prediction() %}
+              {% set show_others = locked %} {# once started/finished, show other players' picks #}
               <tr>
 
-                <!-- Kickoff: two lines (date / time). JS will localize from data-utc -->
+                <!-- Kickoff: two lines (date / time) -->
                 <td class="td kickoff">
                   <div class="kickoff-date"
                        data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}">
-                    <!-- filled by JS -->
                   </div>
-                  <div class="kickoff-time"><!-- filled by JS --></div>
+                  <div class="kickoff-time"></div>
                 </td>
 
-                <!-- Match + your ONE set of radios -->
+                <!-- Match + your radios + (mobile) inline players' picks -->
                 <td class="td">
                   <div class="match-title">
                     {{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}
                   </div>
 
-                  <!-- Radios belong to THIS form -->
                   <div class="choice">
                     {% for opt,label in [('1','1'),('X','X'),('2','2')] %}
                       <label class="radio">
@@ -88,27 +94,45 @@
                     {% endif %}
                   </div>
 
-                  <!-- MOBILE: all players’ picks inline under the match -->
-                  {% if all_preds and all_preds.get(f.id) %}
-                    <div class="mobile-picks-row">
-                      {% for uname, sel in all_preds.get(f.id) %}
-                        <span class="pick-chip pick-{{ sel|lower }}">{{ uname }}: {{ sel }}</span>
-                      {% endfor %}
-                    </div>
-                  {% endif %}
+                  <!-- MOBILE: show all players' picks in one line below the radios -->
+                  <div class="mobile-picks-list show-mobile">
+                    {% if show_others %}
+                      {% set pairs = all_preds.get(f.id, []) %}
+                      {% if pairs and pairs|length > 0 %}
+                        {% for uname, sel in pairs %}
+                          <span class="chip"><strong>{{ uname }}:</strong> {{ sel or '—' }}</span>
+                        {% endfor %}
+                      {% else %}
+                        <span class="muted tiny">No picks.</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="muted tiny">Picks hidden until kickoff.</span>
+                    {% endif %}
+                  </div>
                 </td>
 
-                <!-- DESKTOP: one column per user, show pick -->
-                {% for uid, uname in users_cols %}
-                  {% set pick = (all_preds.get(f.id)|selectattr(0, 'equalto', uname)|list if all_preds else []) %}
-                  {% set shown = (pick[0][1] if pick and pick[0]|length > 1 else '—') %}
-                  <td class="td user-col-td">
-                    {{ shown }}
-                  </td>
-                {% endfor %}
+                <!-- DESKTOP: per-user columns -->
+                {% if usernames %}
+                  {% for uname in usernames %}
+                    {% set pairs = all_preds.get(f.id, []) %}
+                    {% set pick = None %}
+                    {% for u, s in pairs %}
+                      {% if u == uname %}
+                        {% set pick = s %}
+                      {% endif %}
+                    {% endfor %}
+                    <td class="td hide-mobile" style="text-align:center;font-variant-numeric:tabular-nums;">
+                      {% if show_others %}
+                        {{ pick or '—' }}
+                      {% else %}
+                        <span class="muted tiny">—</span>
+                      {% endif %}
+                    </td>
+                  {% endfor %}
+                {% endif %}
 
                 <!-- Result -->
-                <td class="td td-result">
+                <td class="td result-cell">
                   {% if f.home_score is not none and f.away_score is not none %}
                     <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
                   {% else %}
@@ -116,8 +140,8 @@
                   {% endif %}
                 </td>
 
-                <!-- Status LAST -->
-                <td class="td td-status">
+                <!-- Status -->
+                <td class="td" style="text-align:center;">
                   {% set s = f.display_status() %}
                   <span class="pill
                               {% if s == 'LIVE' %} live
@@ -136,11 +160,8 @@
     </div>
     {% endif %}
 
-    <!-- Sticky Save (inside the same form) -->
     <div class="sticky-save" style="text-align:center;margin-top:10px;">
-      <button class="btn btn-primary save-all-predictions-btn" type="submit">
-        💾 Save All Predictions
-      </button>
+      <button class="btn btn-primary save-all-predictions-btn" type="submit">💾 Save All Predictions</button>
     </div>
 
   </form>
@@ -149,7 +170,7 @@
 
 {% block scripts %}
 <script>
-  // Localize kickoff into two lines: Date (top) + Time (bottom)
+  // Localize kickoff into two lines
   function fmtDate(dt){
     const d = new Date(dt);
     return d.toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' });
