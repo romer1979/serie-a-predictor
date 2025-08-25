@@ -535,42 +535,53 @@ def latest_completed_matchday(season: str) -> str | None:
 
 def current_home_matchday(season: str) -> str | None:
     """
-    Choose which matchday to show on the Home page:
-    1) If any fixture is LIVE/PAUSED -> that matchday.
-    2) Else the matchday of the earliest UPCOMING/TIMED fixture (>= now).
-    3) Else the latest COMPLETED matchday (end-of-season fallback).
-    Returns the matchday as a string, or None if season has no fixtures.
+    Determine which matchday to present on the home page.  The logic
+    prioritises the earliest matchday that has any fixture not yet
+    finished, so that users remain on the current round until every
+    game is completed.  If a later round has begun (i.e. there are
+    scheduled or timed fixtures for the next round and all earlier
+    rounds are finished), then that round will be shown.  Only when
+    every round in the season is completed will the latest
+    matchday be returned.
+
+    Returns the matchday as a string, or None if the season has no
+    matchdays.
     """
     if not season:
         return None
 
-    now_utc = datetime.now(timezone.utc)
+    # Gather all matchdays for the season, attempting numeric sort when
+    # possible.  This ensures matchday "10" follows "9" rather than
+    # lexicographically after "1".
+    days = matchdays_for(season)
+    if not days:
+        return None
+    try:
+        sorted_days = [str(n) for n in sorted({int(d) for d in days})]
+    except Exception:
+        sorted_days = sorted(set(days), key=lambda s: (len(s), s))
 
-    # 1) Prefer any live matchday
-    live = (
-        db.session.query(Fixture.matchday)
-        .filter(Fixture.season == season, Fixture.status.in_(('IN_PLAY', 'PAUSED')))
-        .order_by(Fixture.matchday.asc())
-        .first()
-    )
-    if live and live[0]:
-        return str(live[0])
-
-    # 2) Matchday of the earliest upcoming fixture (SCHEDULED/TIMED with kickoff >= now)
-    upcoming = (
-        db.session.query(Fixture.matchday, Fixture.match_date)
-        .filter(
-            Fixture.season == season,
-            Fixture.status.in_(('SCHEDULED', 'TIMED')),
-            Fixture.match_date >= now_utc,
+    # Iterate through matchdays in ascending order and return the first
+    # one that still has any fixture not finished.  A fixture is
+    # considered not finished if its status is anything other than
+    # 'FINISHED'.  This keeps users on the current round until it has
+    # fully concluded.
+    for md in sorted_days:
+        remaining = (
+            db.session.query(Fixture.id)
+            .filter(
+                Fixture.season == season,
+                Fixture.matchday == md,
+                Fixture.status != 'FINISHED'
+            )
+            .first()
         )
-        .order_by(Fixture.match_date.asc())
-        .first()
-    )
-    if upcoming and upcoming[0]:
-        return str(upcoming[0])
+        if remaining is not None:
+            return md
 
-    # 3) Latest completed matchday (if season is between rounds or finished)
+    # If all matchdays are complete (every fixture is finished), fall
+    # back to the latest completed matchday.  This maintains backward
+    # compatibility with existing behaviour at end of season.
     return latest_completed_matchday(season)
 
 def weekly_user_points(season: str, matchday: str):
@@ -868,7 +879,14 @@ def history():
     # these flags so that picks remain hidden until kickoff.  This
     # prevents revealing predictions for future fixtures if a user
     # navigates to a not-yet-started matchday.
-    users_cols, pred_matrix, show_flags = prediction_matrix(fixtures)
+    users_cols, pred_matrix, _show_flags = prediction_matrix(fixtures)
+    # Override show flags for the history view.  We only reveal
+    # predictions once a fixture has started (IN_PLAY/PAUSED) or is
+    # finished.  This avoids showing picks for matches that are still
+    # in TIMED/SCHEDULED state even if their kickoff time has passed.
+    show_flags = {}
+    for f in fixtures:
+        show_flags[f.id] = f.status in ("IN_PLAY", "PAUSED", "FINISHED")
 
     return render_template(
         "history.html",
