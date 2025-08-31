@@ -508,13 +508,18 @@ def prediction_matrix(fixtures):
         user_set[uid] = uname
     users = sorted(user_set.items(), key=lambda t: t[1].lower())
 
-    # Build the matrix keyed by (fixture_key, user_id).  We prefer match_id
-    # because it stays constant across fixture re-imports; fall back to
-    # fixture_id if match_id is missing.
-    matrix = {}
+    # Build the matrix keyed by both (fixture_id, user_id) and (match_id, user_id).
+    # We prefer match_id when present (it stays constant across re-imports),
+    # but also store predictions under the internal fixture.id to support
+    # legacy rows or templates that still index by id.  Without this dual
+    # mapping, re-importing fixtures can cause historical picks to vanish.
+    matrix: dict[tuple[str|int,int], str] = {}
     for uid, uname, fid, sel, match_id in rows:
-        key = match_id or fid
-        matrix[(key, uid)] = sel
+        # Always store under the internal fixture.id
+        matrix[(fid, uid)] = sel
+        # Additionally, store under the stable match_id when available
+        if match_id:
+            matrix[(match_id, uid)] = sel
 
     # Compute reveal flags using the same logic as before: reveal if the
     # fixture is LIVE/PAUSED/FINISHED or the current time has reached kickoff.
