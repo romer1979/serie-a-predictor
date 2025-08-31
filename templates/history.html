@@ -112,6 +112,8 @@
           <tbody>
             {% for f in fixtures %}
               {% set reveal = show_preds_flags.get(f.id) %}
+              {# Determine the stable key for this fixture (match_id or id). #}
+              {% set fkey = f.match_id or f.id %}
               {% if f.home_score is not none and f.away_score is not none %}
                 {% set outcome = '1' if f.home_score > f.away_score else ('2' if f.away_score > f.home_score else 'X') %}
               {% else %}
@@ -130,7 +132,8 @@
                 </td>
                 <!-- User picks: reveal only when show flag is true -->
                 {% for uid, uname in users_cols %}
-                  {% set pick = pred_matrix.get((f.id, uid)) %}
+                  {# Try both match_id and fixture.id when looking up predictions #}
+                  {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
                   <td class="td desktop-only text-center">
                     {% if reveal %}
                       <span class="desk-pick {{ 'pick-correct' if outcome and pick == outcome else '' }}">{{ pick or '—' }}</span>
@@ -162,8 +165,9 @@
                 <td class="td" colspan="{{ 2 + users_cols|length + 2 }}">
                   {% if reveal %}
                     <div class="predictions-strip">
-                      {% for uid, uname in users_cols %}
-                        {% set pick = pred_matrix.get((f.id, uid)) %}
+                  {% for uid, uname in users_cols %}
+                        {# Try both keys for mobile picks #}
+                        {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
                         <span class="mb-chip {{ 'pick-correct' if outcome and pick == outcome else '' }}">
                           <span class="mb-name">{{ uname }}</span>
                           <span class="mb-sep">:</span>
