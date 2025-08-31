@@ -119,9 +119,11 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for f in fixtures %}
+                          {% for f in fixtures %}
                           {# Prepare some helpers for each fixture. #}
                           {% set my = user_predictions.get(f.id) %}
+                          {# Use the stable match_id as the fixture key when looking up predictions. #}
+                          {% set fkey = f.match_id or f.id %}
                           {% set locked = not f.is_open_for_prediction() %}
                           {% set reveal = show_preds_flags.get(f.id) %}
                           {% if f.home_score is not none and f.away_score is not none %}
@@ -167,7 +169,10 @@
 
                             <!-- One column per user (visible only on larger screens). -->
                             {% for uid, uname in users_cols %}
-                              {% set pick = pred_matrix.get((f.id, uid)) %}
+                              {# Look up this user's pick using both keys: prefer match_id,
+                                 fall back to fixture.id.  This avoids missing predictions
+                                 when fixtures are re-imported and their internal IDs change. #}
+                              {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
                               <td class="td desktop-only text-center">
                                 {% if reveal %}
                                   <span class="desk-pick {{ 'pick-correct' if outcome and pick == outcome else '' }}">{{ pick or '—' }}</span>
@@ -204,14 +209,15 @@
                             <td class="td" colspan="{{ 2 + users_cols|length + 2 }}">
                               {% if reveal %}
                                 <div class="predictions-strip">
-                                  {% for uid, uname in users_cols %}
-                                    {% set pick = pred_matrix.get((f.id, uid)) %}
-                                    <span class="mb-chip {{ 'pick-correct' if outcome and pick == outcome else '' }}">
-                                      <span class="mb-name">{{ uname }}</span>
-                                      <span class="mb-sep">:</span>
-                                      <span class="mb-pick">{{ pick or '—' }}</span>
-                                    </span>
-                                  {% endfor %}
+                              {% for uid, uname in users_cols %}
+                                {# Use both keys for mobile picks as well #}
+                                {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
+                                <span class="mb-chip {{ 'pick-correct' if outcome and pick == outcome else '' }}">
+                                  <span class="mb-name">{{ uname }}</span>
+                                  <span class="mb-sep">:</span>
+                                  <span class="mb-pick">{{ pick or '—' }}</span>
+                                </span>
+                              {% endfor %}
                                 </div>
                               {% else %}
                                 <div class="tiny muted">Predictions hidden until kickoff.</div>
