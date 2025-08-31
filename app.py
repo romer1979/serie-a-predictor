@@ -293,12 +293,27 @@ def update_fixtures() -> None:
                 existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
                 if existing:
                     updated = False
-                    if fi['status'] != existing.status:
-                        existing.status = fi['status']; updated = True
-                    if fi['home_score'] is not None and fi['home_score'] != existing.home_score:
-                        existing.home_score = fi['home_score']; updated = True
-                    if fi['away_score'] is not None and fi['away_score'] != existing.away_score:
-                        existing.away_score = fi['away_score']; updated = True
+                    # Update status and scores on the existing fixture.
+                    # Prioritise final scores: if both home and away scores
+                    # are present (non-None) then this fixture is finished,
+                    # regardless of what the API status says.  Otherwise
+                    # update the status only if the API provides a new status.
+                    home_sc = fi['home_score']
+                    away_sc = fi['away_score']
+                    if home_sc is not None and home_sc != existing.home_score:
+                        existing.home_score = home_sc; updated = True
+                    if away_sc is not None and away_sc != existing.away_score:
+                        existing.away_score = away_sc; updated = True
+
+                    # If both scores are present, force the status to FINISHED
+                    if home_sc is not None and away_sc is not None:
+                        if existing.status != 'FINISHED':
+                            existing.status = 'FINISHED'; updated = True
+                    else:
+                        # Otherwise rely on API status updates
+                        if fi['status'] != existing.status:
+                            existing.status = fi['status']; updated = True
+
                     if updated:
                         db.session.add(existing)
                 else:
@@ -330,7 +345,14 @@ def update_fixtures() -> None:
                             legacy.match_date = dt  # normalize to the API UTC time
                         db.session.add(legacy)
                     else:
-                        # No legacy row; insert fresh
+                        # No legacy row; insert fresh.  If both scores are
+                        # present then mark the fixture as finished; otherwise
+                        # use the API status as-is.
+                        home_sc = fi['home_score']
+                        away_sc = fi['away_score']
+                        status = fi['status']
+                        if home_sc is not None and away_sc is not None:
+                            status = 'FINISHED'
                         db.session.add(Fixture(
                             match_id=fi['match_id'],
                             match_date=fi['match_date'],
@@ -338,9 +360,9 @@ def update_fixtures() -> None:
                             away_team=fi['away_team'],
                             season=fi['season'],
                             matchday=fi.get('matchday'),
-                            status=fi['status'],
-                            home_score=fi['home_score'],
-                            away_score=fi['away_score'],
+                            status=status,
+                            home_score=home_sc,
+                            away_score=away_sc,
                         ))
         
     db.session.commit()
@@ -454,31 +476,48 @@ def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[st
 
 def prediction_matrix(fixtures):
     """
-    Return (users, matrix, show_flags)
-      users: list of (user_id, username)
-      matrix: dict[(fixture_id, user_id)] -> '1'|'X'|'2'
-      show_flags: dict[fixture_id] -> bool (True to reveal picks on/after kickoff or when live/finished)
+    Build the prediction matrix for a list of Fixture objects.
+
+    Returns:
+      users: list of (user_id, username) sorted alphabetically by username
+      matrix: dict keyed by (fixture_key, user_id) -> prediction ('1','X','2')
+        where fixture_key is the stable match_id if available, falling back to
+        the internal fixture.id.  This allows predictions attached to older
+        fixture rows (with different ids but same match_id) to be matched
+        against the current fixture list.
+      show_flags: dict[fixture.id] -> bool indicating whether to reveal picks
+        for that fixture.  Picks are revealed if the fixture is in play,
+        paused, finished, or if kickoff time has passed.
     """
     if not fixtures:
         return [], {}, {}
 
     fix_ids = [f.id for f in fixtures]
+    # Join Users, Predictions and Fixtures to obtain match_id for each prediction.
     rows = (
-        db.session.query(User.id, User.username, Prediction.fixture_id, Prediction.selection)
+        db.session.query(User.id, User.username, Prediction.fixture_id, Prediction.selection, Fixture.match_id)
         .join(Prediction, Prediction.user_id == User.id)
+        .join(Fixture, Fixture.id == Prediction.fixture_id)
         .filter(Prediction.fixture_id.in_(fix_ids))
         .all()
     )
 
+    # Build a unique sorted list of users who made predictions for these fixtures.
     user_set = {}
-    for uid, uname, _, _ in rows:
+    for uid, uname, _, _, _ in rows:
         user_set[uid] = uname
     users = sorted(user_set.items(), key=lambda t: t[1].lower())
 
+    # Build the matrix keyed by (fixture_key, user_id).  We prefer match_id
+    # because it stays constant across fixture re-imports; fall back to
+    # fixture_id if match_id is missing.
     matrix = {}
-    for uid, uname, fid, sel in rows:
-        matrix[(fid, uid)] = sel
+    for uid, uname, fid, sel, match_id in rows:
+        key = match_id or fid
+        matrix[(key, uid)] = sel
 
+    # Compute reveal flags using the same logic as before: reveal if the
+    # fixture is LIVE/PAUSED/FINISHED or the current time has reached kickoff.
     utc_now = datetime.now(timezone.utc)
     show_flags = {}
     for f in fixtures:
@@ -880,13 +919,18 @@ def history():
     # prevents revealing predictions for future fixtures if a user
     # navigates to a not-yet-started matchday.
     users_cols, pred_matrix, _show_flags = prediction_matrix(fixtures)
-    # Override show flags for the history view.  We only reveal
-    # predictions once a fixture has started (IN_PLAY/PAUSED) or is
-    # finished.  This avoids showing picks for matches that are still
-    # in TIMED/SCHEDULED state even if their kickoff time has passed.
+    # Override show flags for the history view.  We want to reveal
+    # predictions once a fixture has actually begun or concluded.  In
+    # practice some APIs leave the status as TIMED/SCHEDULED even after
+    # kickoff or full‑time.  To avoid hiding picks in those cases, also
+    # reveal predictions when a final score is present.  This means
+    # users will see predictions for any fixture with a recorded result,
+    # or with a live/paused/finished status, but not for future games.
     show_flags = {}
     for f in fixtures:
-        show_flags[f.id] = f.status in ("IN_PLAY", "PAUSED", "FINISHED")
+        reveal_by_status = f.status in ("IN_PLAY", "PAUSED", "FINISHED")
+        reveal_by_score = (f.home_score is not None and f.away_score is not None)
+        show_flags[f.id] = reveal_by_status or reveal_by_score
 
     return render_template(
         "history.html",
