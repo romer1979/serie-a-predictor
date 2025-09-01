@@ -26,9 +26,19 @@
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
           </li>
+          {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('history') }}">History</a>
+            </li>
+          {% endif %}
           <li class="nav-item">
             <a class="nav-link active" aria-current="page" href="{{ url_for('admin') }}">Admin</a>
           </li>
+          {% if current_user.is_authenticated and current_user.is_admin %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin_coverage') }}">Coverage</a>
+          </li>
+          {% endif %}
           {% if current_user.is_authenticated %}
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
