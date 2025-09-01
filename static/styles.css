@@ -345,3 +345,23 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   background: rgba(220,53,69,.15);
   border-color: rgba(220,53,69,.35);
 }
+
+/*
+ * Coverage table overrides (admin coverage page)
+ *
+ * To ensure the coverage table on the admin page remains legible against
+ * the dark background, we force white text and adjust muted text and
+ * prediction chips.  The table has an id="coverage-table", so these
+ * selectors do not affect other tables in the application.
+ */
+#coverage-table th,
+#coverage-table td {
+  color: #f8f9fa !important;
+}
+#coverage-table .muted,
+#coverage-table .text-muted {
+  color: rgba(255,255,255,0.75) !important;
+}
+#coverage-table .mb-chip {
+  color: #f8f9fa !important;
+}
