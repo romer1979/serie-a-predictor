@@ -26,6 +26,9 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import check_password_hash, generate_password_hash
 from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
+# Utility: default dictionary for coverage computation
+from collections import defaultdict
+
 # -----------------------------------------------------------------------------
 # App / DB config
 # -----------------------------------------------------------------------------
@@ -530,65 +533,6 @@ def prediction_matrix(fixtures):
         show_flags[f.id] = (f.status in ("IN_PLAY", "PAUSED", "FINISHED")) or (utc_now >= kickoff)
 
     return users, matrix, show_flags
-
-# --- COVERAGE: Who hasn't submitted a pick yet (privacy-safe) -----------------
-from collections import defaultdict
-
-def prediction_coverage(season: str, matchday: str):
-    """
-    Return per-fixture coverage for a given season & matchday, without revealing picks.
-    Output: list of dicts:
-      {
-        'fixture': Fixture,
-        'submitted_count': int,
-        'total_players': int,
-        'missing_users': [User,...]  # players who have NOT submitted for this fixture
-      }
-    Policy:
-      - We consider "players" to be non-admin, active users.
-      - We do not read or expose Prediction.selection at all (only existence).
-    """
-    # 1) Get fixtures for the requested round
-    fixtures = (Fixture.query
-                .filter_by(season=season, matchday=matchday)
-                .order_by(Fixture.kickoff.asc())
-                .all())
-    fixture_ids = [f.id for f in fixtures]
-    if not fixtures:
-        return []
-
-    # 2) Define the pool of players to expect a prediction from
-    players = (User.query
-               .filter_by(is_active=True)    # if you have such a column; else drop
-               .filter(User.is_admin == False)
-               .order_by(User.username.asc())
-               .all())
-    player_ids = {u.id for u in players}
-
-    # 3) Fetch only (user_id, fixture_id) pairs; DO NOT read selections
-    predicted_pairs = (db.session.query(Prediction.user_id, Prediction.fixture_id)
-                       .filter(Prediction.fixture_id.in_(fixture_ids),
-                               Prediction.user_id.in_(player_ids))
-                       .all())
-
-    predicted_by_fixture = defaultdict(set)
-    for uid, fid in predicted_pairs:
-        predicted_by_fixture[fid].add(uid)
-
-    # 4) Build coverage rows
-    rows = []
-    total_players = len(players)
-    id_to_user = {u.id: u for u in players}
-    for f in fixtures:
-        submitted_ids = predicted_by_fixture.get(f.id, set())
-        missing_ids = list(player_ids - submitted_ids)
-        rows.append({
-            "fixture": f,
-            "submitted_count": len(submitted_ids),
-            "total_players": total_players,
-            "missing_users": [id_to_user[i] for i in sorted(missing_ids)]
-        })
-    return rows
 
 def evaluate_predictions() -> None:
     """
@@ -1098,31 +1042,111 @@ def admin_refresh():
     flash("Fixtures refreshed.", "success")
     return redirect(url_for("index"))
 
+# ----------------------------------------------------------------------------
+# Prediction coverage view for admins
+#
+# This helper returns, for each fixture in a given season & matchday, the
+# number of players who have submitted a prediction and a list of users who
+# have not yet picked.  It relies solely on the existence of (user_id,
+# fixture_id) rows in the predictions table and never inspects any
+# Prediction.selection values.  The caller is responsible for enforcing
+# authorization (admin-only).
+def prediction_coverage(season: str, matchday: str):
+    """Return coverage statistics for each fixture in a round.
+
+    Each element of the returned list is a dict with keys:
+      - fixture: the Fixture instance
+      - submitted_count: how many players submitted a pick
+      - total_players: total number of eligible players
+      - missing_users: list of User instances who have not yet submitted
+
+    Players are defined as non-admin users; optionally you can filter
+    out inactive users if your User model has an `is_active` flag.
+    """
+    # Fetch fixtures for this round
+    fixtures = (Fixture.query
+                .filter_by(season=season, matchday=matchday)
+                .order_by(Fixture.match_date.asc())
+                .all())
+    if not fixtures:
+        return []
+
+    # Determine the pool of players (non-admin users).  Remove the
+    # `is_active` filter if your schema does not support it.
+    players = (User.query
+               .filter(User.is_admin == False)
+               .order_by(User.username.asc())
+               .all())
+    player_ids = {u.id for u in players}
+    id_to_user = {u.id: u for u in players}
+
+    fixture_ids = [f.id for f in fixtures]
+
+    # Fetch pairs of (user_id, fixture_id) for existing predictions.
+    # We do not load the prediction selection itself.
+    pairs = (db.session.query(Prediction.user_id, Prediction.fixture_id)
+             .filter(Prediction.fixture_id.in_(fixture_ids),
+                     Prediction.user_id.in_(player_ids))
+             .all())
+
+    predicted_by_fixture = defaultdict(set)
+    for uid, fid in pairs:
+        predicted_by_fixture[fid].add(uid)
+
+    total_players = len(players)
+    rows = []
+    for f in fixtures:
+        submitted = predicted_by_fixture.get(f.id, set())
+        missing_ids = sorted(player_ids - submitted)
+        rows.append({
+            "fixture": f,
+            "submitted_count": len(submitted),
+            "total_players": total_players,
+            "missing_users": [id_to_user[i] for i in missing_ids],
+        })
+    return rows
+
+
 @app.route("/admin/coverage", methods=["GET"])
 @login_required
-@admin
 def admin_coverage():
-    # Query params
+    """Admin endpoint: show prediction coverage for a season & matchday.
+
+    Requires the current user to be an admin.  Accepts optional query
+    parameters:
+      - season: the season to view (defaults to the current or latest)
+      - matchday: the matchday to view (defaults to the current incomplete round)
+
+    Renders the admin_coverage.html template with coverage stats for each
+    fixture.
+    """
+    if not current_user.is_admin:
+        abort(403)
+    # Compute available seasons and pick the current one from the DB or
+    # fallback to the last in the list
+    seasons = seasons_available()
+    current_season = current_season_from_db() or (seasons[-1] if seasons else None)
+    # Determine requested season; if absent use current season
     season = request.args.get("season") or current_season
-    md = request.args.get("matchday")
+    # Determine matchday; if absent choose the current incomplete round or last
+    md_param = request.args.get("matchday")
+    if md_param:
+        md = md_param
+    else:
+        if season:
+            md = current_home_matchday(season) or (matchdays_for(season) or [None])[-1]
+        else:
+            md = None
 
-    # Default to the "current home matchday" (your function) if not provided
-    if not md:
-        md = current_home_matchday(season) or matchdays_for(season)[-1]
-
-    # Build dropdowns
-    seasons = all_seasons()                     # your existing helper
-    mds = matchdays_for(season)                 # your existing helper
-
-    # Compute privacy-safe coverage
-    rows = prediction_coverage(season, md)
+    matchdays = matchdays_for(season) if season else []
+    rows = prediction_coverage(season, md) if season and md else []
 
     return render_template(
-        "admin_coverage.html",   # or fold this into admin.html if you prefer
-        season=season,
+        "admin_coverage.html",
         seasons=seasons,
+        season=season,
+        matchdays=matchdays,
         matchday=md,
-        matchdays=mds,
         rows=rows,
     )
 
