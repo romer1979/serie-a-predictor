@@ -84,7 +84,7 @@
             <h1 class="h4 m-0">
                 {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
             </h1>
-            <button class="btn btn-primary" type="submit">💾 Save All Predictions</button>
+            <button class="btn btn-primary save-all-predictions-btn" type="submit">💾 Save All Predictions</button>
         </div>
 
         {# When there are no fixtures we show a friendly message inside a card. #}
@@ -150,7 +150,9 @@
                                  locked. -->
                             <td class="td">
                               <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
-                              <div class="choice">
+            <div class="choice"
+                   data-fixture-id="{{ f.id }}"
+                   data-initial="{{ my.selection if my else '' }}">
                                 {% for opt, label in [('1','1'),('X','X'),('2','2')] %}
                                   <label class="radio form-check-inline">
                                     <input type="radio"
@@ -164,6 +166,8 @@
                                 {% if locked and f.status != 'FINISHED' %}
                                   <span class="tiny muted">Locked</span>
                                 {% endif %}
+                                <!-- status badge to indicate whether a pick is saved, unsaved or missing -->
+                                <span class="pred-badge" id="pred-badge-{{ f.id }}"></span>
                               </div>
                             </td>
 
@@ -269,6 +273,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const timeEl = el.parentElement.querySelector('.kickoff-time');
     if (timeEl) timeEl.textContent = fmtTime(iso);
   });
+});
+// Prediction badge logic: show Saved/Unsaved/No pick states and update save
+// button label with the number of unsaved changes.  Each .choice element
+// stores the initial selection (if any) in a data attribute for easy
+// comparison with the current radio value.  A small pill to the right of
+// the radio group reflects the state of the pick.  The save button
+// displays a counter when there are unsaved picks.
+function setBadge (el, state) {
+  // Reset and assign appropriate classes
+  el.className = 'pred-badge ' + (
+    state === 'saved'   ? 'pred-saved' :
+    state === 'unsaved' ? 'pred-unsaved' :
+                          'pred-missing'
+  );
+  // Set a concise text label
+  el.textContent =
+    state === 'saved'   ? 'Saved' :
+    state === 'unsaved' ? 'Unsaved changes' :
+                          'No pick';
+}
+function recomputeAllBadges () {
+  let unsavedCount = 0;
+  document.querySelectorAll('.choice[data-fixture-id]').forEach(choice => {
+    const fid = choice.getAttribute('data-fixture-id');
+    const initial = choice.getAttribute('data-initial') || '';
+    const checked = choice.querySelector('input[type=radio]:checked');
+    const val = checked ? checked.value : '';
+    const badge = document.getElementById('pred-badge-' + fid);
+    if (!badge) return;
+    if (!val) {
+      setBadge(badge, 'missing');
+    } else if (initial && val === initial) {
+      setBadge(badge, 'saved');
+    } else {
+      setBadge(badge, 'unsaved');
+      unsavedCount++;
+    }
+  });
+  // Update all Save All Predictions buttons with unsaved count
+  document.querySelectorAll('.save-all-predictions-btn').forEach(btn => {
+    const base = '💾 Save All Predictions';
+    btn.textContent = unsavedCount > 0 ? `${base} (${unsavedCount})` : base;
+  });
+}
+// Attach change listeners to each radio input
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.choice input[type=radio]').forEach(r => {
+    r.addEventListener('change', recomputeAllBadges);
+  });
+  // Compute initial state once DOM is ready
+  recomputeAllBadges();
 });
 </script>
     <!-- Include Bootstrap's JavaScript bundle so that the navbar toggler
