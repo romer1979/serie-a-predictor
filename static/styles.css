@@ -299,6 +299,20 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   .tiny { font-size: .78rem; }
 }
 
+/* Coverage page adjustments: ensure .table-dark inside a card inherits our dark theme colours.
+   Without these rules the default Bootstrap `.table-dark` can render text in
+   a muted gray and cells with insufficient contrast on our custom card. */
+.table-card .table-dark th,
+.table-card .table-dark td {
+  color: #f8f9fa;
+}
+.table-card .table-dark thead th {
+  background-color: rgba(255,255,255,0.05) !important;
+}
+.table-card .table-dark tbody tr:nth-of-type(odd) td {
+  background-color: rgba(255,255,255,0.02) !important;
+}
+
 /* ==================================================
  * Prediction status pills for your pick
  *
