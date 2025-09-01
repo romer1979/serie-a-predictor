@@ -298,3 +298,36 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   .table .th, .table .td { padding: .5rem .55rem; }
   .tiny { font-size: .78rem; }
 }
+
+/* ==================================================
+ * Prediction status pills for your pick
+ *
+ * Each fixtures table row includes a small pill next to the radio
+ * buttons that indicates whether the user's prediction has been
+ * saved, modified but not yet saved, or is missing entirely.  We
+ * choose subtle background colours to fit the dark theme without
+ * overwhelming the rest of the UI.  The border colours are slightly
+ * more saturated to improve contrast.  See index.html for the
+ * corresponding JavaScript that toggles these classes.
+ */
+.pred-badge {
+  display: inline-block;
+  margin-left: .4rem;
+  padding: .15rem .45rem;
+  border-radius: 999px;
+  font-size: .78rem;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+}
+.pred-saved {
+  background: rgba(25,135,84,.15);
+  border-color: rgba(25,135,84,.35);
+}
+.pred-unsaved {
+  background: rgba(255,193,7,.15);
+  border-color: rgba(255,193,7,.35);
+}
+.pred-missing {
+  background: rgba(220,53,69,.15);
+  border-color: rgba(220,53,69,.35);
+}
