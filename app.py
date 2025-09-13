@@ -536,12 +536,44 @@ def prediction_matrix(fixtures):
 
 def evaluate_predictions() -> None:
     """
-    Finalize points for games that ended.
+    Assign points to predictions for fixtures with final scores.
+
+    A prediction earns 1 point if the user's selection matches the final
+    outcome (home win, draw or away win), and 0 otherwise.  We award
+    points once per fixture and do not reevaluate predictions that have
+    already been scored.  Previously this function only considered
+    fixtures whose status field was exactly ``"FINISHED"``.  However,
+    some APIs do not update the status field promptly or at all when
+    final scores are available.  As a result predictions could remain
+    unscored, leading to incorrect leaderboard totals.
+
+    To avoid this, we now consider any fixture where both the home
+    score and away score are present (non-None) to be complete.  This
+    ensures that if final scores are recorded—even if the status is
+    still ``SCHEDULED``, ``TIMED`` or ``IN_PLAY``—predictions will be
+    evaluated exactly once.
     """
-    finished_fixtures = Fixture.query.filter(Fixture.status == "FINISHED").all()
+    # Select fixtures that have recorded scores for both teams.  We do not
+    # rely on the ``status`` field here because some APIs fail to update
+    # it consistently.  Using ``isnot(None)`` ensures we only target
+    # fixtures with final scores.
+    finished_fixtures = (
+        Fixture.query
+        .filter(Fixture.home_score.isnot(None), Fixture.away_score.isnot(None))
+        .all()
+    )
     for fixture in finished_fixtures:
         outcome = fixture.outcome_code()
+        # Skip fixtures without a determinable outcome (should not happen
+        # because we filter by both scores being present).  If either score
+        # were None the outcome_code would return None and no points would
+        # be awarded.
+        if outcome is None:
+            continue
         for prediction in fixture.predictions:
+            # Award points only once.  If ``points_awarded`` is already
+            # set, leave it unchanged.  This prevents re-evaluating
+            # predictions and ensures idempotence across multiple calls.
             if prediction.points_awarded is None:
                 prediction.points_awarded = 1 if prediction.selection == outcome else 0
                 db.session.add(prediction)
@@ -817,7 +849,13 @@ def save_all_predictions():
 @app.route("/leaderboard")
 @login_required
 def leaderboard():
+    # Update fixture data (poll API if necessary) and award points for any
+    # fixtures with recorded scores.  ``update_fixtures_adaptive`` may skip
+    # fetching if called too frequently, so we explicitly call
+    # ``evaluate_predictions`` here to ensure finished games are scored
+    # whenever the leaderboard is viewed.
     update_fixtures_adaptive()
+    evaluate_predictions()
 
     seasons = seasons_available()
     current_season = current_season_from_db() or (seasons[-1] if seasons else None)
