@@ -103,7 +103,27 @@ class User(db.Model, UserMixin):
 
     @property
     def points(self) -> int:
-        return sum(p.points_awarded or 0 for p in self.predictions)
+        """
+        Total points across all predictions for this user.
+
+        A user earns 1 point for each correct prediction: a home win ("1") if
+        the home team's final score is greater than the away team's, a draw
+        ("X") if the scores are equal, and an away win ("2") if the away
+        team scores more.  This calculation does not rely on the
+        ``points_awarded`` column; instead it computes correctness on the
+        fly using the associated fixture's final scores.  Predictions for
+        fixtures without recorded scores contribute 0 points.
+        """
+        total = 0
+        for pred in self.predictions:
+            fix = pred.fixture
+            # Skip fixtures without a recorded final score
+            if fix is None or fix.home_score is None or fix.away_score is None:
+                continue
+            outcome = fix.outcome_code()
+            if outcome and pred.selection == outcome:
+                total += 1
+        return total
 
 
 class Invite(db.Model):
@@ -664,18 +684,41 @@ def current_home_matchday(season: str) -> str | None:
     return latest_completed_matchday(season)
 
 def weekly_user_points(season: str, matchday: str):
-    rows = (
-        db.session.query(
-            User.id,
-            User.username,
-            func.coalesce(func.sum(Prediction.points_awarded), 0).label("pts"),
-        )
-        .join(Prediction, Prediction.user_id == User.id)
+    """
+    Return a list of (user_id, username, points) for the given season and matchday.
+
+    Points are computed dynamically: for each prediction linked to a fixture
+    in the specified season and matchday, add 1 point if the selection
+    matches the final outcome of that fixture.  Predictions for fixtures
+    without final scores contribute 0 points.  Users with no predictions
+    for this round are omitted from the result.
+    """
+    # Fetch predictions joined with fixtures and users for the target
+    # matchday.  We do not rely on points_awarded here.
+    predictions = (
+        db.session.query(Prediction, Fixture, User)
         .join(Fixture, Fixture.id == Prediction.fixture_id)
+        .join(User, User.id == Prediction.user_id)
         .filter(Fixture.season == season, Fixture.matchday == str(matchday))
-        .group_by(User.id, User.username)
         .all()
     )
+    # Accumulate points per user
+    user_points: dict[int, int] = {}
+    user_names: dict[int, str] = {}
+    for pred, fix, user in predictions:
+        user_names[user.id] = user.username
+        if fix.home_score is None or fix.away_score is None:
+            # fixture not completed; no points
+            continue
+        outcome = fix.outcome_code()
+        if outcome and pred.selection == outcome:
+            user_points[user.id] = user_points.get(user.id, 0) + 1
+        else:
+            # incorrect predictions contribute 0; ensure user appears with 0 if not present
+            user_points.setdefault(user.id, user_points.get(user.id, 0))
+    # Build rows list: (id, username, points)
+    rows = [(uid, user_names.get(uid, ""), pts) for uid, pts in user_points.items()]
+    # Sort by points desc then username
     return sorted(rows, key=lambda r: (-r[2], r[1].lower()))
 
 def current_season_from_db() -> str | None:
@@ -721,21 +764,33 @@ def classify_matchdays(season: str):
     return finished, live, upcoming, other
 
 def season_user_points(season: str):
-    rows = (
-        db.session.query(
-            User.username,
-            func.coalesce(func.sum(Prediction.points_awarded), 0).label("pts"),
-        )
-        .join(Prediction, Prediction.user_id == User.id)
+    """
+    Return a list of dicts {username: points} for the specified season.
+
+    Points are computed dynamically: each correct prediction yields 1 point.
+    Predictions on fixtures without final scores yield 0 points.  Users
+    who have not made any predictions for the season will not appear in
+    the output.  The result is sorted descending by points and then
+    alphabetically by username.
+    """
+    predictions = (
+        db.session.query(Prediction, Fixture, User)
         .join(Fixture, Fixture.id == Prediction.fixture_id)
+        .join(User, User.id == Prediction.user_id)
         .filter(Fixture.season == season)
-        .group_by(User.username)
         .all()
     )
-    return sorted(
-        [{"username": r[0], "points": int(r[1])} for r in rows],
-        key=lambda x: (-x["points"], x["username"].lower())
-    )
+    user_points: dict[str, int] = {}
+    for pred, fix, user in predictions:
+        if fix.home_score is None or fix.away_score is None:
+            continue
+        outcome = fix.outcome_code()
+        if outcome and pred.selection == outcome:
+            user_points[user.username] = user_points.get(user.username, 0) + 1
+        else:
+            user_points.setdefault(user.username, user_points.get(user.username, 0))
+    rows = [{"username": uname, "points": pts} for uname, pts in user_points.items()]
+    return sorted(rows, key=lambda x: (-x["points"], x["username"].lower()))
 
 # -----------------------------------------------------------------------------
 # Routes
