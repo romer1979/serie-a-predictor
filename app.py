@@ -918,7 +918,10 @@ def leaderboard():
     raw_scope = request.args.get("scope")
     scope = (raw_scope or "season").lower()
     season = request.args.get("season")
-    matchday = request.args.get("matchday", type=int)
+    # Matchday: treat as a string so that the selected option remains highlighted
+    # in the template.  Converting to int can cause mismatches when comparing
+    # against the list of matchday strings (e.g. '2' vs 2).  See issue #X.
+    matchday = request.args.get("matchday")
 
     if raw_scope is None and current_season:
         return redirect(url_for("leaderboard", scope="season", season=current_season))
