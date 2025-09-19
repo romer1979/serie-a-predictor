@@ -337,6 +337,25 @@ def update_fixtures() -> None:
                         if fi['status'] != existing.status:
                             existing.status = fi['status']; updated = True
 
+                    # Always update the kickoff time if the API differs significantly.
+                    # The schedule released by the league may change after the initial
+                    # fixtures are created.  To ensure kickoff dates stay current,
+                    # we update the match_date whenever it drifts by more than
+                    # one minute relative to the API.  This allows rescheduled
+                    # matches (e.g., moving from a provisional timetable) to take
+                    # effect without constantly adjusting for trivial differences.
+                    api_dt = fi['match_date']
+                    if api_dt and existing.match_date:
+                        # If the stored match_date differs by more than 60 seconds
+                        # from the API-provided date, update it.
+                        try:
+                            delta = abs((existing.match_date - api_dt).total_seconds())
+                        except Exception:
+                            delta = None
+                        if delta is not None and delta > 60:
+                            existing.match_date = api_dt
+                            updated = True
+
                     if updated:
                         db.session.add(existing)
                 else:
