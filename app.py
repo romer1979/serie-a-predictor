@@ -377,14 +377,33 @@ def update_fixtures() -> None:
                         .order_by(Fixture.match_date.asc())
                         .first()
                     )
+                    # If no match within the 12h window, try to locate an existing fixture
+                    # by season + matchday + teams.  This helps reconcile provisional
+                    # entries from the fallback when the league moves a match by more than
+                    # a day.  We ignore the date here and only update fields.
+                    if not legacy and fi.get('matchday'):
+                        legacy = (
+                            Fixture.query
+                            .filter(
+                                Fixture.season == fi['season'],
+                                Fixture.matchday == fi['matchday'],
+                                func.lower(Fixture.home_team) == fi['home_team'].lower(),
+                                func.lower(Fixture.away_team) == fi['away_team'].lower(),
+                            )
+                            .order_by(Fixture.match_date.asc())
+                            .first()
+                        )
                     if legacy:
                         # Adopt the official API id and update fields in-place
                         legacy.match_id = fi['match_id']
                         legacy.status = fi['status']
                         legacy.home_score = fi['home_score']
                         legacy.away_score = fi['away_score']
+                        # Always update the match_date to the API-provided time if it
+                        # differs by more than a minute.  This handles both minor
+                        # adjustments and wholesale rescheduling.
                         if abs((legacy.match_date - dt).total_seconds()) > 60:
-                            legacy.match_date = dt  # normalize to the API UTC time
+                            legacy.match_date = dt
                         db.session.add(legacy)
                     else:
                         # No legacy row; insert fresh.  If both scores are
