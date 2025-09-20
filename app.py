@@ -158,10 +158,26 @@ class Fixture(db.Model):
         return "X"
 
     def is_open_for_prediction(self) -> bool:
+        """
+        Return True if predictions can still be made for this fixture.
+
+        Predictions should be locked once the game has begun.  The game is
+        considered started not only when the kickoff time has passed, but
+        also as soon as a score is recorded.  This prevents users from
+        submitting or modifying picks after a goal has been scored.
+
+        Returns False if the current UTC time is on or after the scheduled
+        kickoff (`match_date`), or if either home_score or away_score is
+        recorded (even if zero).  Otherwise returns True.
+        """
         now_utc = datetime.now(timezone.utc)
         md = self.match_date
         if md.tzinfo is None:
             md = md.replace(tzinfo=timezone.utc)
+        # If either score is recorded (including 0), lock predictions
+        if self.home_score is not None or self.away_score is not None:
+            return False
+        # Otherwise open until kickoff time
         return now_utc < md
 
     def display_status(self) -> str:
