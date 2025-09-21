@@ -1222,6 +1222,40 @@ def admin_reset_password(user_id: int):
         flash(f"Password reset for {user.username}.", "success")
     return redirect(url_for("admin"))
 
+# -----------------------------------------------------------------------------
+# Admin: delete a user
+#
+# Allows an administrator to permanently remove a user account.  The request
+# must be a POST to avoid accidental deletions via GET.  We prohibit
+# self‑deletion and deleting other admin users for safety.  All associated
+# predictions are cascaded via the relationship defined on the User model.
+@app.route("/admin/delete_user/<int:user_id>", methods=["POST"])
+@login_required
+def admin_delete_user(user_id: int):
+    """
+    Remove a user and their predictions from the database.
+
+    This route can only be accessed by an admin.  It checks that the target
+    user exists and is not the current admin.  It also prevents deletion of
+    other admin accounts.  Upon success it flashes a message and redirects
+    back to the admin panel.
+    """
+    if not current_user.is_admin:
+        abort(403)
+    user = User.query.get(user_id)
+    if not user:
+        flash("User not found.", "danger")
+    elif user.id == current_user.id:
+        flash("You cannot delete your own account.", "danger")
+    elif user.is_admin:
+        flash("Cannot delete another admin user.", "danger")
+    else:
+        username = user.username
+        db.session.delete(user)
+        db.session.commit()
+        flash(f"User {username} deleted.", "success")
+    return redirect(url_for("admin"))
+
 @app.route("/admin/refresh", methods=["POST"])
 @login_required
 def admin_refresh():
