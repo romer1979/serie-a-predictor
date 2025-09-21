@@ -1181,7 +1181,36 @@ def admin():
                 db.session.commit()
                 flash("Invite created.", "success")
     invites = Invite.query.all()
-    return render_template("admin.html", invites=invites)
+    # Include all users for password reset form.  Do not include admin-only fields.
+    users = User.query.order_by(User.username.asc()).all()
+    return render_template("admin.html", invites=invites, users=users)
+
+@app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
+@login_required
+def admin_reset_password(user_id: int):
+    """
+    Allow an admin to reset a user's password.
+
+    This route accepts a POST with a `new_password` parameter and updates the
+    user's password using set_password().  It is protected by login and admin
+    checks.  Upon completion, it redirects back to the admin page with a flash
+    message.
+    """
+    if not current_user.is_admin:
+        abort(403)
+    new_password = request.form.get("new_password") or ""
+    user = User.query.get(user_id)
+    if not user:
+        flash("User not found.", "danger")
+    elif not new_password:
+        flash("New password must not be empty.", "danger")
+    else:
+        # Set the new password securely
+        user.set_password(new_password)
+        db.session.add(user)
+        db.session.commit()
+        flash(f"Password reset for {user.username}.", "success")
+    return redirect(url_for("admin"))
 
 @app.route("/admin/refresh", methods=["POST"])
 @login_required
