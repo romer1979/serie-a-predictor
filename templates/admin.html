@@ -114,6 +114,7 @@
               <th scope="col">Username</th>
               <th scope="col">Role</th>
               <th scope="col">Reset password</th>
+              <th scope="col">Delete</th>
             </tr>
           </thead>
           <tbody>
@@ -128,6 +129,15 @@
                          placeholder="New password" required>
                   <button type="submit" class="btn btn-sm btn-danger">Reset</button>
                 </form>
+              </td>
+              <td>
+                {% if not usr.is_admin and usr.id != current_user.id %}
+                <form method="post" action="{{ url_for('admin_delete_user', user_id=usr.id) }}" onsubmit="return confirm('Delete {{ usr.username }}?');">
+                  <button type="submit" class="btn btn-sm btn-warning">Delete</button>
+                </form>
+                {% else %}
+                <span class="muted small">—</span>
+                {% endif %}
               </td>
             </tr>
             {% endfor %}
