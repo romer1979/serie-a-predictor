@@ -289,6 +289,25 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
      viewport.  ``-webkit-overflow-scrolling: touch`` enables smooth
      momentum scrolling on iOS. */
   .table-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* When viewing predictions via the mobile toggle, stack each pick
+     vertically to better fit narrow screens.  Without this the chips
+     are arranged horizontally and require horizontal scrolling. */
+  .predictions-strip {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .4rem;
+    overflow-x: visible;
+  }
+  .predictions-strip .mb-chip {
+    /* Each prediction chip occupies the full width to avoid
+       overflowing or squeezing the content.  Align items
+       horizontally so the name, separator and pick stay on one line. */
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: .25rem;
+  }
 }
 
 /* Extra small phones */
