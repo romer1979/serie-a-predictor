@@ -1231,6 +1231,25 @@ def admin_refresh():
     flash("Fixtures refreshed.", "success")
     return redirect(url_for("index"))
 
+# -----------------------------------------------------------------------------
+# History refresh route
+#
+# Allows any logged-in user to manually trigger an update of fixture data
+# (dates, times, scores) and then redirect back to the history page.  We
+# include the current season and matchday in hidden form inputs so the user
+# returns to the same view after refreshing.  This route simply calls
+# update_fixtures_adaptive(force=True) and flashes a message.
+
+@app.route("/history/refresh", methods=["POST"])
+@login_required
+def history_refresh():
+    season = request.form.get("season")
+    matchday = request.form.get("matchday")
+    update_fixtures_adaptive(force=True)
+    flash("Fixtures refreshed.", "success")
+    # Redirect back to the history page with the same parameters
+    return redirect(url_for("history", season=season, matchday=matchday))
+
 # ----------------------------------------------------------------------------
 # Prediction coverage view for admins
 #
