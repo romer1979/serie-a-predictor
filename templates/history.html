@@ -63,6 +63,12 @@
     <!-- Header with season and matchday selection -->
     <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3 gap-3">
       <h1 class="h4 m-0">History — Season {{ season }}{% if matchday %}, Matchday {{ matchday }}{% endif %}</h1>
+      <!-- Refresh button to update fixture dates/times.  Posts to history_refresh -->
+      <form method="post" action="{{ url_for('history_refresh') }}" class="mt-2 mt-md-0">
+        <input type="hidden" name="season" value="{{ season }}">
+        <input type="hidden" name="matchday" value="{{ matchday }}">
+        <button type="submit" class="btn btn-sm btn-secondary">Refresh</button>
+      </form>
     </div>
     <!-- Filter controls: choose season and matchday.  Changing either reloads the page -->
     <form method="get" class="row g-3 align-items-end mb-4">
