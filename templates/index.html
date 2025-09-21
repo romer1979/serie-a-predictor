@@ -153,6 +153,8 @@
                                  locked. -->
                             <td class="td">
                               <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+              <!-- Toggle link for mobile to show/hide picks -->
+              <a href="#" class="tiny toggle-picks d-md-none" data-target="picks-{{ f.id }}">Show picks</a>
             <div class="choice"
                    data-fixture-id="{{ f.id }}"
                    data-initial="{{ my.selection if my else '' }}">
@@ -212,7 +214,7 @@
 
                           <!-- Mobile only row: show all players’ picks in a single
                                horizontally scrollable strip underneath the main row. -->
-                          <tr class="mobile-picks-row">
+                          <tr id="picks-{{ f.id }}" class="mobile-picks-row d-none">
                             <td class="td" colspan="{{ 2 + users_cols|length + 2 }}">
                               {% if reveal %}
                                 <div class="predictions-strip">
@@ -328,6 +330,32 @@ document.addEventListener('DOMContentLoaded', () => {
   // Compute initial state once DOM is ready
   recomputeAllBadges();
 });
+
+  // Toggle predictions on mobile.  Each "Show picks" link carries a
+  // data-target attribute pointing at the id of the hidden picks row.  When
+  // the link is clicked we toggle the corresponding row’s visibility and
+  // update the link text between "Show picks" and "Hide picks".  This
+  // behaviour only affects mobile devices (the link is hidden on medium
+  // and larger screens via ``d-md-none``).  We wait until the DOM is
+  // ready to ensure the elements exist.
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.toggle-picks').forEach(link => {
+      link.addEventListener('click', ev => {
+        ev.preventDefault();
+        const targetId = link.getAttribute('data-target');
+        if (!targetId) return;
+        const row = document.getElementById(targetId);
+        if (!row) return;
+        row.classList.toggle('d-none');
+        // Update the link text based on current state
+        if (row.classList.contains('d-none')) {
+          link.textContent = 'Show picks';
+        } else {
+          link.textContent = 'Hide picks';
+        }
+      });
+    });
+  });
 </script>
     <!-- Include Bootstrap's JavaScript bundle so that the navbar toggler
          and other interactive components work as expected.  Placing this
