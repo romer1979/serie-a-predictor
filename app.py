@@ -159,52 +159,53 @@ class Fixture(db.Model):
 
     def is_open_for_prediction(self) -> bool:
         """
-        Return True if predictions can still be made for this fixture.
+        Determine whether predictions can still be made for this fixture.
 
-        Predictions should be locked once the game has begun.  The game is
-        considered started not only when the kickoff time has passed, but
-        also as soon as a score is recorded.  This prevents users from
-        submitting or modifying picks after a goal has been scored.
+        In this version of the app, we allow predictions to remain open
+        until the final result has been recorded.  A fixture is only
+        considered locked once both the home and away scores are present
+        (even if zero).  This means users can submit or modify their
+        predictions even after the nominal kickoff time and even while
+        the match is in play, up until a final score is recorded.  Once
+        final scores are available, further predictions are rejected.
 
-        Returns False if the current UTC time is on or after the scheduled
-        kickoff (`match_date`), or if either home_score or away_score is
-        recorded (even if zero).  Otherwise returns True.
+        Returns False to lock predictions when both ``home_score`` and
+        ``away_score`` are not None; otherwise returns True.
         """
-        now_utc = datetime.now(timezone.utc)
-        md = self.match_date
-        if md.tzinfo is None:
-            md = md.replace(tzinfo=timezone.utc)
-        # If either score is recorded (including 0), lock predictions
-        if self.home_score is not None or self.away_score is not None:
+        # Lock only when both home and away scores have been recorded
+        if (self.home_score is not None) and (self.away_score is not None):
             return False
-        # Otherwise open until kickoff time
-        return now_utc < md
+        # Otherwise leave predictions open regardless of current time or status
+        return True
 
     def display_status(self) -> str:
         """
-        Human-friendly status with time-based fallback so we don't stay on 'TIMED'.
-        """
-        # Normalize kickoff to UTC
-        md = self.match_date
-        if md.tzinfo is None:
-            md = md.replace(tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
+        Human-friendly status for display in the UI.
 
-        # Trust explicit statuses first
+        We prioritise official status codes and recorded scores rather than
+        inferring match state solely from the scheduled kickoff time.  A
+        fixture is considered:
+
+          * ``LIVE`` when the API reports ``IN_PLAY`` or ``PAUSED``.
+          * ``FT`` (full time) when the API reports ``FINISHED`` or when
+            final scores have been recorded for both teams.
+          * ``TIMED`` otherwise (including ``SCHEDULED`` and ``TIMED``).
+
+        This avoids showing ``LIVE`` for fixtures that have not yet begun,
+        even if the scheduled kickoff time has passed and the API has not
+        updated the status.  It also ensures that fixtures with recorded
+        scores but an outdated status are marked as finished.
+        """
+        # If both scores are present, treat as finished regardless of status.
+        if (self.home_score is not None) and (self.away_score is not None):
+            return 'FT'
+        # Use explicit API statuses.
         if self.status in ('IN_PLAY', 'PAUSED'):
             return 'LIVE'
         if self.status == 'FINISHED':
             return 'FT'
-
-        # If API is stale:
-        if now < md:
-            return 'TIMED'                            # before kickoff
-        if now <= md + timedelta(hours=2, minutes=30):
-            return 'LIVE'                             # around match window
-        if (self.home_score is not None and self.away_score is not None) or now > md + timedelta(hours=3):
-            return 'FT'                               # long after KO or score present
-
-        return 'LIVE'
+        # For SCHEDULED or TIMED statuses (or any other), show TIMED.
+        return 'TIMED'
 
 class Prediction(db.Model):
     __tablename__ = "predictions"
@@ -598,13 +599,22 @@ def prediction_matrix(fixtures):
         if match_id:
             matrix[(match_id, uid)] = sel
 
-    # Compute reveal flags using the same logic as before: reveal if the
-    # fixture is LIVE/PAUSED/FINISHED or the current time has reached kickoff.
-    utc_now = datetime.now(timezone.utc)
+    # Compute reveal flags.  Predictions should be revealed only once the
+    # fixture has genuinely started or finished.  We rely on the official
+    # status codes from the API (IN_PLAY, PAUSED, FINISHED) and also
+    # consider a fixture to have started when a score has been recorded for
+    # either team.  We deliberately avoid revealing picks solely based on
+    # the scheduled kickoff time, because league reschedulings and API
+    # delays can cause mismatches between the timetable and the actual
+    # match start.
     show_flags = {}
     for f in fixtures:
-        kickoff = f.match_date.replace(tzinfo=timezone.utc) if f.match_date.tzinfo is None else f.match_date
-        show_flags[f.id] = (f.status in ("IN_PLAY", "PAUSED", "FINISHED")) or (utc_now >= kickoff)
+        # Reveal predictions only when a final result has been recorded.
+        # We consider a fixture to be complete when both home and away
+        # scores are present.  Until then, picks remain hidden regardless
+        # of the scheduled kickoff time or live status.
+        result_recorded = (f.home_score is not None) and (f.away_score is not None)
+        show_flags[f.id] = result_recorded
 
     return users, matrix, show_flags
 
