@@ -249,6 +249,12 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
 
 /* ====== Responsive ====== */
 @media (max-width: 768px) {
+  /* Hide the kickoff column entirely on mobile to maximise horizontal space.
+     Both the header and body cells are suppressed, and the corresponding
+     column (<col>) is removed from the layout. */
+  .col-kickoff { display: none !important; }
+  th.kickoff-col { display: none !important; }
+  td.kickoff { display: none !important; }
   .table .th, .table .td { padding: .6rem .7rem; }
   .kickoff-date { font-size: .85rem; }
   .kickoff-time { font-size: .78rem; }
