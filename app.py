@@ -1251,6 +1251,11 @@ def admin_delete_user(user_id: int):
         flash("Cannot delete another admin user.", "danger")
     else:
         username = user.username
+        # Unlink invites referencing this user so the foreign key constraint
+        # does not block deletion.  We set used_by_user_id to None for any
+        # invite used by this user.
+        Invite.query.filter_by(used_by_user_id=user.id).update({Invite.used_by_user_id: None})
+        # Now delete the user; cascades on predictions will remove those rows.
         db.session.delete(user)
         db.session.commit()
         flash(f"User {username} deleted.", "success")
