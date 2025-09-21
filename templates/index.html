@@ -112,7 +112,8 @@
                     </colgroup>
                     <thead>
                         <tr>
-                            <th class="th kickoff-col text-center">Kickoff</th>
+                            <!-- Hide the kickoff column on small screens with Bootstrap’s d-none/d-md-table-cell classes -->
+                            <th class="th kickoff-col text-center d-none d-md-table-cell">Kickoff</th>
                             <th class="th">Match</th>
                             {% for uid, uname in users_cols %}
                               <th class="th desktop-only text-center" title="{{ uname }}">{{ uname }}</th>
@@ -143,7 +144,7 @@
                             <!-- Kickoff: the date/time is populated client‑side using
                                  JavaScript.  We render an ISO UTC timestamp on the
                                  ``data-utc`` attribute and let the browser format it. -->
-                            <td class="td kickoff text-center">
+                            <td class="td kickoff text-center d-none d-md-table-cell">
                               <div class="kickoff-date" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}"></div>
                               <div class="kickoff-time"></div>
                             </td>
