@@ -265,25 +265,24 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
 
   /*
    * On mobile devices we hide the per‑user columns and show the
-   * horizontally scrollable strip instead.  We also surface the
-   * sticky save bar: it floats at the bottom of the screen and
-   * centres the call‑to‑action within it.
+   * horizontally scrollable strip instead.  We also present the
+   * secondary save button below the fixtures list rather than
+   * fixing it to the viewport bottom.  This ensures the button
+   * never overlaps content while still providing an easy way
+   * to submit your picks at the end of the page.
    */
   .sticky-save {
     display: block;
-    position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 16px;
-    width: auto;
-    z-index: 1000;
+    position: static;
+    margin-top: 1.5rem;
+    width: 100%;
     text-align: center;
   }
   .sticky-save .save-all-predictions-btn {
     padding: .8rem 1.25rem;
     font-size: 1rem;
     border-radius: 999px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.25);
+    box-shadow: 0 4px 12px rgba(0,0,0,.2);
   }
 
   /* Make table horizontally scrollable if the combined width exceeds the
