@@ -73,7 +73,7 @@
             <th class="th text-center">Kickoff</th>
             <th class="th">Fixture</th>
             <th class="th text-center">Current result</th>
-            <th class="th">Edit result</th>
+            <th class="th">Edit result &amp; kickoff</th>
           </tr>
         </thead>
         <tbody>
@@ -95,9 +95,13 @@
             </td>
             <td class="td">
               <form class="d-flex flex-wrap gap-2" method="post" action="{{ url_for('admin_update_result', fixture_id=f.id) }}">
+                <!-- Home score -->
                 <input type="number" name="home_score" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Home" style="width: 70px" value="{{ f.home_score if f.home_score is not none else '' }}">
                 <span class="muted d-inline-block" style="line-height: 1.6;">–</span>
+                <!-- Away score -->
                 <input type="number" name="away_score" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Away" style="width: 70px" value="{{ f.away_score if f.away_score is not none else '' }}">
+                <!-- Kickoff datetime editor.  Use datetime-local input to edit match_date.  Value is formatted to minutes. -->
+                <input type="datetime-local" name="match_date" class="form-control form-control-sm bg-dark text-white border-secondary" style="min-width: 190px" value="{{ f.match_date.strftime('%Y-%m-%dT%H:%M') }}">
                 <button type="submit" class="btn btn-sm btn-primary">Save</button>
               </form>
             </td>
