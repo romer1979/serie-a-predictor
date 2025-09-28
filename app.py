@@ -146,12 +146,6 @@ class Fixture(db.Model):
     home_score = db.Column(db.Integer, nullable=True)
     away_score = db.Column(db.Integer, nullable=True)
 
-    # Flags indicating manual overrides.  When an admin manually edits the
-    # result or kickoff for a fixture, these flags are set to True.
-    # They persist across refreshes and prevent update_fixtures() from
-    # overwriting the manually-entered data with API values.
-    manual_score_override = db.Column(db.Boolean, default=False)
-    manual_date_override = db.Column(db.Boolean, default=False)
 
     predictions = db.relationship("Prediction", back_populates="fixture", cascade="all, delete-orphan")
 
@@ -206,10 +200,13 @@ class Fixture(db.Model):
         # If both scores are present, treat as finished regardless of status.
         if (self.home_score is not None) and (self.away_score is not None):
             return 'FT'
+        # Strip any manual suffix from status (e.g., FINISHED_MANUAL)
+        status = self.status or ''
+        base = status.split('_')[0] if '_' in status else status
         # Use explicit API statuses.
-        if self.status in ('IN_PLAY', 'PAUSED'):
+        if base in ('IN_PLAY', 'PAUSED'):
             return 'LIVE'
-        if self.status == 'FINISHED':
+        if base == 'FINISHED':
             return 'FT'
         # For SCHEDULED or TIMED statuses (or any other), show TIMED.
         return 'TIMED'
@@ -353,8 +350,9 @@ def update_fixtures() -> None:
                     # update the status only if the API provides a new status.
                     home_sc = fi['home_score']
                     away_sc = fi['away_score']
-                    # Update scores only if there is no manual override
-                    if not getattr(existing, 'manual_score_override', False):
+                    # Skip updates on manually overridden fixtures (status containing 'MANUAL')
+                    manual = existing.status and ('MANUAL' in existing.status)
+                    if not manual:
                         if home_sc is not None and home_sc != existing.home_score:
                             existing.home_score = home_sc; updated = True
                         if away_sc is not None and away_sc != existing.away_score:
@@ -375,7 +373,9 @@ def update_fixtures() -> None:
                     # matches (e.g., moving from a provisional timetable) to take
                     # effect without constantly adjusting for trivial differences.
                     api_dt = fi['match_date']
-                    if api_dt and existing.match_date and not getattr(existing, 'manual_date_override', False):
+                    # Only update kickoff time if fixture is not manually overridden
+                    manual = existing.status and ('MANUAL' in existing.status)
+                    if api_dt and existing.match_date and not manual:
                         # If the stored match_date differs by more than 60 seconds
                         # from the API-provided date, update it.
                         try:
@@ -426,17 +426,18 @@ def update_fixtures() -> None:
                     if legacy:
                         # Adopt the official API id and update fields in-place
                         legacy.match_id = fi['match_id']
-                        # Only update scores and status if not overridden manually
-                        if not getattr(legacy, 'manual_score_override', False):
+                        manual = legacy.status and ('MANUAL' in legacy.status)
+                        if not manual:
+                            # Update scores and status when not overridden
                             legacy.status = fi['status']
                             legacy.home_score = fi['home_score']
                             legacy.away_score = fi['away_score']
                             # If both scores are present, override status to FINISHED
                             if fi['home_score'] is not None and fi['away_score'] is not None:
                                 legacy.status = 'FINISHED'
-                        # Always update the match_date to the API-provided time if it
-                        # differs by more than a minute and there is no manual date override.
-                        if not getattr(legacy, 'manual_date_override', False):
+                            # Always update the match_date to the API-provided time if it
+                            # differs by more than a minute.  This handles both minor
+                            # adjustments and wholesale rescheduling.
                             try:
                                 if abs((legacy.match_date - dt).total_seconds()) > 60:
                                     legacy.match_date = dt
@@ -1336,12 +1337,6 @@ def admin_results():
 def admin_update_result(fixture_id: int):
     if not current_user.is_admin:
         abort(403)
-    # Ensure any new columns (manual overrides) exist in the database.  This
-    # call is idempotent and safe to execute in request context.
-    try:
-        db.create_all()
-    except Exception:
-        pass
     fixture = Fixture.query.get(fixture_id)
     if not fixture:
         flash("Fixture not found.", "danger")
@@ -1366,25 +1361,20 @@ def admin_update_result(fixture_id: int):
             # If the parsed datetime is naive (no tzinfo), assume UTC
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            # If new datetime differs from existing, record manual override
+            # Update match_date if the value has changed
             if fixture.match_date != dt:
                 fixture.match_date = dt
-                fixture.manual_date_override = True
         except Exception:
             # Ignore invalid input; leave match_date unchanged
             pass
-    # Set status to FINISHED if both scores are provided; otherwise leave as is
-    if home_score is not None and away_score is not None:
-        fixture.status = "FINISHED"
-    else:
-        # If we removed a score, ensure status is not erroneously FINISHED
-        if fixture.status == "FINISHED":
-            fixture.status = "TIMED"
-    # Set manual score override flag when either score is provided
-    if home_score is not None or away_score is not None:
-        fixture.manual_score_override = True
-    else:
-        fixture.manual_score_override = False
+    # Determine if this edit constitutes a manual override of scores or kickoff
+    manual_action = False
+    if (home_score is not None) or (away_score is not None) or match_date_str:
+        manual_action = True
+    if manual_action:
+        # Derive a base status: FINISHED if both scores present, otherwise TIMED
+        base_status = "FINISHED" if (home_score is not None and away_score is not None) else "TIMED"
+        fixture.status = f"{base_status}_MANUAL"
 
     db.session.add(fixture)
     db.session.commit()
