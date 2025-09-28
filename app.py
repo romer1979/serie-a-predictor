@@ -1271,6 +1271,79 @@ def admin_refresh():
     return redirect(url_for("index"))
 
 # -----------------------------------------------------------------------------
+# Admin: results management
+#
+# Provide a page to review and edit fixture results for a given season and
+# matchday.  Only admins can access this page.  The page lists all
+# fixtures in the selected round with a form per fixture to update the
+# home and away scores.  Editing the result sets the fixture's status to
+# 'FINISHED' when both scores are provided.
+@app.route("/admin/results", methods=["GET"])
+@login_required
+def admin_results():
+    if not current_user.is_admin:
+        abort(403)
+    # Determine the season and matchday to display
+    seasons = seasons_available()
+    # If there are no fixtures at all, just render an empty page
+    if not seasons:
+        return render_template("admin_results.html", fixtures=[], seasons=[], season=None, matchday=None, matchdays=[])
+    season = request.args.get("season") or seasons[-1]
+    matchdays = matchdays_for(season) if season else []
+    matchday = request.args.get("matchday") or (matchdays[0] if matchdays else None)
+    fixtures = []
+    if season and matchday:
+        fixtures = (
+            Fixture.query
+            .filter_by(season=season, matchday=matchday)
+            .order_by(Fixture.match_date.asc())
+            .all()
+        )
+    return render_template(
+        "admin_results.html",
+        fixtures=fixtures,
+        seasons=seasons,
+        season=season,
+        matchday=matchday,
+        matchdays=matchdays,
+    )
+
+# Route to update a fixture's result manually.  Accepts POST with
+# 'home_score' and 'away_score' fields.  Only admin can perform this action.
+@app.route("/admin/update_result/<int:fixture_id>", methods=["POST"])
+@login_required
+def admin_update_result(fixture_id: int):
+    if not current_user.is_admin:
+        abort(403)
+    fixture = Fixture.query.get(fixture_id)
+    if not fixture:
+        flash("Fixture not found.", "danger")
+        return redirect(url_for("admin_results"))
+    # Parse incoming scores; allow empty strings to clear the score
+    def parse_score(s):
+        try:
+            return int(s) if s is not None and s != "" else None
+        except Exception:
+            return None
+    home_score = parse_score(request.form.get("home_score"))
+    away_score = parse_score(request.form.get("away_score"))
+    fixture.home_score = home_score
+    fixture.away_score = away_score
+    # Set status to FINISHED if both scores are provided; otherwise leave as is
+    if home_score is not None and away_score is not None:
+        fixture.status = "FINISHED"
+    else:
+        # If we removed a score, ensure status is not erroneously FINISHED
+        if fixture.status == "FINISHED":
+            fixture.status = "TIMED"
+    db.session.add(fixture)
+    db.session.commit()
+    # Re-evaluate predictions in case the outcome changed
+    evaluate_predictions()
+    flash(f"Result updated for {fixture.home_team} vs {fixture.away_team}.", "success")
+    return redirect(url_for("admin_results", season=fixture.season, matchday=fixture.matchday))
+
+# -----------------------------------------------------------------------------
 # History refresh route
 #
 # Allows any logged-in user to manually trigger an update of fixture data
