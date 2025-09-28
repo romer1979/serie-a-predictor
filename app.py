@@ -1329,6 +1329,20 @@ def admin_update_result(fixture_id: int):
     away_score = parse_score(request.form.get("away_score"))
     fixture.home_score = home_score
     fixture.away_score = away_score
+    # Optionally update match_date if provided
+    match_date_str = request.form.get("match_date")
+    if match_date_str:
+        try:
+            # Expect an ISO datetime without timezone (YYYY-MM-DDTHH:MM)
+            from datetime import datetime, timezone
+            dt = datetime.fromisoformat(match_date_str)
+            # If the parsed datetime is naive (no tzinfo), assume UTC
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            fixture.match_date = dt
+        except Exception:
+            # Ignore invalid input; leave match_date unchanged
+            pass
     # Set status to FINISHED if both scores are provided; otherwise leave as is
     if home_score is not None and away_score is not None:
         fixture.status = "FINISHED"
@@ -1340,7 +1354,7 @@ def admin_update_result(fixture_id: int):
     db.session.commit()
     # Re-evaluate predictions in case the outcome changed
     evaluate_predictions()
-    flash(f"Result updated for {fixture.home_team} vs {fixture.away_team}.", "success")
+    flash(f"Result and kickoff updated for {fixture.home_team} vs {fixture.away_team}.", "success")
     return redirect(url_for("admin_results", season=fixture.season, matchday=fixture.matchday))
 
 # -----------------------------------------------------------------------------
