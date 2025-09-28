@@ -12,7 +12,6 @@
        running through the web app, and the second one falls back to
        loading from the local directory when opened as a static file. -->
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <link rel="stylesheet" href="styles.css">
 </head>
 <body class="bg-dark text-white">
   <!-- Navigation bar shared across the site.  It mirrors the one on the
@@ -44,6 +43,9 @@
             </li>
             <li class="nav-item">
               <a class="nav-link" href="{{ url_for('admin_coverage') }}">Coverage</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('admin_results') }}">Edit results</a>
             </li>
           {% endif %}
           {% if current_user.is_authenticated %}
