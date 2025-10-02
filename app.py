@@ -722,12 +722,9 @@ def current_home_matchday(season: str) -> str | None:
     """
     Determine which matchday to present on the home page.  The logic
     prioritises the earliest matchday that has any fixture not yet
-    finished, so that users remain on the current round until every
-    game is completed.  If a later round has begun (i.e. there are
-    scheduled or timed fixtures for the next round and all earlier
-    rounds are finished), then that round will be shown.  Only when
-    every round in the season is completed will the latest
-    matchday be returned.
+    finished. If all matchdays have finished fixtures, return the
+    earliest upcoming matchday. Only when no future matchdays exist
+    will the latest completed matchday be returned.
 
     Returns the matchday as a string, or None if the season has no
     matchdays.
@@ -735,9 +732,6 @@ def current_home_matchday(season: str) -> str | None:
     if not season:
         return None
 
-    # Gather all matchdays for the season, attempting numeric sort when
-    # possible.  This ensures matchday "10" follows "9" rather than
-    # lexicographically after "1".
     days = matchdays_for(season)
     if not days:
         return None
@@ -746,11 +740,7 @@ def current_home_matchday(season: str) -> str | None:
     except Exception:
         sorted_days = sorted(set(days), key=lambda s: (len(s), s))
 
-    # Iterate through matchdays in ascending order and return the first
-    # one that still has any fixture not finished.  A fixture is
-    # considered not finished if its status is anything other than
-    # 'FINISHED'.  This keeps users on the current round until it has
-    # fully concluded.
+    # First pass: find the earliest matchday with unfinished fixtures
     for md in sorted_days:
         remaining = (
             db.session.query(Fixture.id)
@@ -764,9 +754,22 @@ def current_home_matchday(season: str) -> str | None:
         if remaining is not None:
             return md
 
-    # If all matchdays are complete (every fixture is finished), fall
-    # back to the latest completed matchday.  This maintains backward
-    # compatibility with existing behaviour at end of season.
+    # Second pass: all current matchdays are complete, find next upcoming matchday
+    now_utc = datetime.now(timezone.utc)
+    for md in sorted_days:
+        future_fixtures = (
+            Fixture.query
+            .filter(
+                Fixture.season == season,
+                Fixture.matchday == md,
+                Fixture.match_date > now_utc
+            )
+            .first()
+        )
+        if future_fixtures is not None:
+            return md
+
+    # All matchdays are in the past, return the latest completed matchday
     return latest_completed_matchday(season)
 
 def weekly_user_points(season: str, matchday: str):
