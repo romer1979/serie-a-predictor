@@ -881,29 +881,63 @@ def season_user_points(season: str):
     rows = [{"username": uname, "points": pts} for uname, pts in user_points.items()]
     return sorted(rows, key=lambda x: (-x["points"], x["username"].lower()))
 
+# --- helpers (put near other utilities) ---------------------------------------
+import re
+
+TERMINAL_STATUSES = {"FINISHED", "AWARDED"}  # extend if you use others
+
+def _base_status(s: str) -> str:
+    # normalize statuses we suffix, e.g. FINISHED_MANUAL -> FINISHED
+    return (s or "").split("_", 1)[0]
+
+def fixture_is_finished(fi) -> bool:
+    # If both scores exist, consider finished regardless of status text
+    if fi.home_score is not None and fi.away_score is not None:
+        return True
+    return _base_status(fi.status) in TERMINAL_STATUSES
+
+def coerce_md(md):
+    # matchday might be "5" or "MD 5" – coerce to int for sorting
+    if isinstance(md, int):
+        return md
+    nums = re.findall(r"\d+", str(md))
+    return int(nums[0]) if nums else 0
+
+def current_matchday_for_season(season: str):
+    qs = Fixture.query.filter_by(season=season).all()
+    if not qs:
+        return None
+    mds = sorted({coerce_md(f.matchday) for f in qs})
+    for md in mds:
+        fixtures = [f for f in qs if coerce_md(f.matchday) == md]
+        if any(not fixture_is_finished(f) for f in fixtures):
+            return md  # first matchday with any unfinished game
+    return (max(mds) + 1)  # everything done -> show next MD
+# ----------------------------------------------------------------------------- 
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
 
-@app.route('/')
+@app.route("/")
 @login_required
 def index():
-    update_fixtures_adaptive()
+    season = active_season()  # however you already pick it
+    md = current_matchday_for_season(season)
+    # if you store matchday labels like "MD 6", format here:
+    md_label = f"{md}" if isinstance(md, int) else md
 
-    # Decide which season & matchday to show
-    season = current_season_from_db()
-    if not season:
-        flash("No season data available yet.", "warning")
-        return render_template(
-            'index.html',
-            fixtures=[],
-            user_predictions={},
-            users_cols=[],
-            pred_matrix={},
-            show_preds_flags={},
-            season=None,
-            matchday=None,
-        )
+    fixtures = (Fixture.query
+                .filter_by(season=season)
+                .filter(Fixture.matchday.in_([md, str(md), f"MD {md}"]))
+                .order_by(Fixture.match_date.asc())
+                .all())
+
+    return render_template(
+        "index.html",
+        fixtures=fixtures,
+        season=season,
+        matchday=md_label
+    )
 
     md = current_home_matchday(season)
     if not md:
