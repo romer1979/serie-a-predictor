@@ -270,7 +270,7 @@ def fetch_fixtures_from_api() -> list[dict]:
         away_ft = ft.get("away")
 
         # For IN_PLAY / PAUSED they often populate "fullTime" as None but "halfTime"/"duration"/"winner" etc.
-        # We’ll also check "regularTime" if available:
+        # We'll also check "regularTime" if available:
         if home_ft is None or away_ft is None:
             reg = score.get("regularTime") or {}
             home_ft = reg.get("home") if home_ft is None else home_ft
@@ -721,10 +721,9 @@ def latest_completed_matchday(season: str) -> str | None:
 def current_home_matchday(season: str) -> str | None:
     """
     Determine which matchday to present on the home page.  The logic
-    prioritises the earliest matchday that has any fixture not yet
-    finished. If all matchdays have finished fixtures, return the
-    earliest upcoming matchday. Only when no future matchdays exist
-    will the latest completed matchday be returned.
+    prioritises the earliest matchday that has any fixture without
+    final results. Once all fixtures in a matchday have both scores
+    recorded, move to the next matchday.
 
     Returns the matchday as a string, or None if the season has no
     matchdays.
@@ -740,36 +739,25 @@ def current_home_matchday(season: str) -> str | None:
     except Exception:
         sorted_days = sorted(set(days), key=lambda s: (len(s), s))
 
-    # First pass: find the earliest matchday with unfinished fixtures
+    # Iterate through matchdays and return the first one that has
+    # any fixture without final results (missing home_score or away_score)
     for md in sorted_days:
-        remaining = (
+        incomplete = (
             db.session.query(Fixture.id)
             .filter(
                 Fixture.season == season,
                 Fixture.matchday == md,
-                Fixture.status != 'FINISHED'
+                db.or_(
+                    Fixture.home_score.is_(None),
+                    Fixture.away_score.is_(None)
+                )
             )
             .first()
         )
-        if remaining is not None:
+        if incomplete is not None:
             return md
 
-    # Second pass: all current matchdays are complete, find next upcoming matchday
-    now_utc = datetime.now(timezone.utc)
-    for md in sorted_days:
-        future_fixtures = (
-            Fixture.query
-            .filter(
-                Fixture.season == season,
-                Fixture.matchday == md,
-                Fixture.match_date > now_utc
-            )
-            .first()
-        )
-        if future_fixtures is not None:
-            return md
-
-    # All matchdays are in the past, return the latest completed matchday
+    # If all matchdays have complete results, return the latest one
     return latest_completed_matchday(season)
 
 def weekly_user_points(season: str, matchday: str):
@@ -881,63 +869,29 @@ def season_user_points(season: str):
     rows = [{"username": uname, "points": pts} for uname, pts in user_points.items()]
     return sorted(rows, key=lambda x: (-x["points"], x["username"].lower()))
 
-# --- helpers (put near other utilities) ---------------------------------------
-import re
-
-TERMINAL_STATUSES = {"FINISHED", "AWARDED"}  # extend if you use others
-
-def _base_status(s: str) -> str:
-    # normalize statuses we suffix, e.g. FINISHED_MANUAL -> FINISHED
-    return (s or "").split("_", 1)[0]
-
-def fixture_is_finished(fi) -> bool:
-    # If both scores exist, consider finished regardless of status text
-    if fi.home_score is not None and fi.away_score is not None:
-        return True
-    return _base_status(fi.status) in TERMINAL_STATUSES
-
-def coerce_md(md):
-    # matchday might be "5" or "MD 5" – coerce to int for sorting
-    if isinstance(md, int):
-        return md
-    nums = re.findall(r"\d+", str(md))
-    return int(nums[0]) if nums else 0
-
-def current_matchday_for_season(season: str):
-    qs = Fixture.query.filter_by(season=season).all()
-    if not qs:
-        return None
-    mds = sorted({coerce_md(f.matchday) for f in qs})
-    for md in mds:
-        fixtures = [f for f in qs if coerce_md(f.matchday) == md]
-        if any(not fixture_is_finished(f) for f in fixtures):
-            return md  # first matchday with any unfinished game
-    return (max(mds) + 1)  # everything done -> show next MD
-# ----------------------------------------------------------------------------- 
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
 
-@app.route("/")
+@app.route('/')
 @login_required
 def index():
-    season = active_season()  # however you already pick it
-    md = current_matchday_for_season(season)
-    # if you store matchday labels like "MD 6", format here:
-    md_label = f"{md}" if isinstance(md, int) else md
+    update_fixtures_adaptive()
 
-    fixtures = (Fixture.query
-                .filter_by(season=season)
-                .filter(Fixture.matchday.in_([md, str(md), f"MD {md}"]))
-                .order_by(Fixture.match_date.asc())
-                .all())
-
-    return render_template(
-        "index.html",
-        fixtures=fixtures,
-        season=season,
-        matchday=md_label
-    )
+    # Decide which season & matchday to show
+    season = current_season_from_db()
+    if not season:
+        flash("No season data available yet.", "warning")
+        return render_template(
+            'index.html',
+            fixtures=[],
+            user_predictions={},
+            users_cols=[],
+            pred_matrix={},
+            show_preds_flags={},
+            season=None,
+            matchday=None,
+        )
 
     md = current_home_matchday(season)
     if not md:
@@ -973,7 +927,7 @@ def index():
         pred_matrix=pred_matrix,
         show_preds_flags=show_flags,
         season=season,
-        matchday=md,  # <-- tell the template which matchday we’re on
+        matchday=md,  # <-- tell the template which matchday we're on
     )
 
 @app.route("/predict/<int:fixture_id>", methods=["POST"])
