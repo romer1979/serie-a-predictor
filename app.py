@@ -1,10 +1,11 @@
 """
 Serie A Predictor web application (cleaned + live-friendly).
 
-Key changes from your last working baseline:
-- Keep live/just-started games visible in the main list by widening the time window.
-- Provide a Jinja filter `utc_iso` to emit ISO 8601 UTC for client-side local time conversion.
-- DO NOT reference any non-existent attributes (like kickoff_utc); always use Fixture.match_date.
+Key changes:
+- Manual score edits are preserved (won't be overwritten by API)
+- Manual date/time edits allow score updates from API
+- Predictions lock at kickoff time (not when results are available)
+- Predictions are revealed at kickoff time (not when results are available)
 """
 
 import os
@@ -145,7 +146,8 @@ class Fixture(db.Model):
     status = db.Column(db.String, default="SCHEDULED")  # SCHEDULED/TIMED/IN_PLAY/PAUSED/FINISHED
     home_score = db.Column(db.Integer, nullable=True)
     away_score = db.Column(db.Integer, nullable=True)
-
+    # New field to track manual score edits
+    scores_manually_edited = db.Column(db.Boolean, default=False)
 
     predictions = db.relationship("Prediction", back_populates="fixture", cascade="all, delete-orphan")
 
@@ -162,22 +164,19 @@ class Fixture(db.Model):
         """
         Determine whether predictions can still be made for this fixture.
 
-        In this version of the app, we allow predictions to remain open
-        until the final result has been recorded.  A fixture is only
-        considered locked once both the home and away scores are present
-        (even if zero).  This means users can submit or modify their
-        predictions even after the nominal kickoff time and even while
-        the match is in play, up until a final score is recorded.  Once
-        final scores are available, further predictions are rejected.
+        Predictions are locked once the match kickoff time has passed.
+        This ensures users cannot make or change predictions after the
+        game has started, regardless of whether results have been recorded.
 
-        Returns False to lock predictions when both ``home_score`` and
-        ``away_score`` are not None; otherwise returns True.
+        Returns False if kickoff time has passed; otherwise returns True.
         """
-        # Lock only when both home and away scores have been recorded
-        if (self.home_score is not None) and (self.away_score is not None):
-            return False
-        # Otherwise leave predictions open regardless of current time or status
-        return True
+        now_utc = datetime.now(timezone.utc)
+        # Ensure match_date is timezone-aware for comparison
+        kickoff = self.match_date
+        if kickoff.tzinfo is None:
+            kickoff = kickoff.replace(tzinfo=timezone.utc)
+        # Lock predictions if kickoff time has passed
+        return now_utc < kickoff
 
     def display_status(self) -> str:
         """
@@ -329,6 +328,9 @@ def update_fixtures() -> None:
     Sync local fixtures with API (if key present) or fallback file.
     Insert new fixtures; update status/scores on existing ones.
     Then evaluate predictions for finished matches.
+    
+    IMPORTANT: Only skip score updates when scores_manually_edited is True.
+    Always allow date/time updates even for manually edited fixtures.
     """
     # Ensure any new columns exist before we begin updates.  Safe to call repeatedly.
     try:
@@ -340,130 +342,127 @@ def update_fixtures() -> None:
     fixtures_to_use = fixtures_from_api if fixtures_from_api else fetch_fixtures_from_fallback()
 
     for fi in fixtures_to_use:
-                existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
-                if existing:
-                    updated = False
-                    # Update status and scores on the existing fixture.
-                    # Prioritise final scores: if both home and away scores
-                    # are present (non-None) then this fixture is finished,
-                    # regardless of what the API status says.  Otherwise
-                    # update the status only if the API provides a new status.
-                    home_sc = fi['home_score']
-                    away_sc = fi['away_score']
-                    # Skip updates on manually overridden fixtures (status containing 'MANUAL')
-                    manual = existing.status and ('MANUAL' in existing.status)
-                    if not manual:
-                        if home_sc is not None and home_sc != existing.home_score:
-                            existing.home_score = home_sc; updated = True
-                        if away_sc is not None and away_sc != existing.away_score:
-                            existing.away_score = away_sc; updated = True
-                        # Update status: if both scores present, mark finished; otherwise update status
-                        if home_sc is not None and away_sc is not None:
-                            if existing.status != 'FINISHED':
-                                existing.status = 'FINISHED'; updated = True
-                        else:
-                            if fi['status'] != existing.status:
-                                existing.status = fi['status']; updated = True
-
-                    # Always update the kickoff time if the API differs significantly.
-                    # The schedule released by the league may change after the initial
-                    # fixtures are created.  To ensure kickoff dates stay current,
-                    # we update the match_date whenever it drifts by more than
-                    # one minute relative to the API.  This allows rescheduled
-                    # matches (e.g., moving from a provisional timetable) to take
-                    # effect without constantly adjusting for trivial differences.
-                    api_dt = fi['match_date']
-                    # Only update kickoff time if fixture is not manually overridden
-                    manual = existing.status and ('MANUAL' in existing.status)
-                    if api_dt and existing.match_date and not manual:
-                        # If the stored match_date differs by more than 60 seconds
-                        # from the API-provided date, update it.
-                        try:
-                            delta = abs((existing.match_date - api_dt).total_seconds())
-                        except Exception:
-                            delta = None
-                        if delta is not None and delta > 60:
-                            existing.match_date = api_dt
-                            updated = True
-
-                    if updated:
-                        db.session.add(existing)
+        existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
+        if existing:
+            updated = False
+            # Update status and scores on the existing fixture.
+            # Only skip score updates if scores were manually edited.
+            # Always allow date/time updates.
+            home_sc = fi['home_score']
+            away_sc = fi['away_score']
+            
+            # Check if scores were manually edited (not date/time)
+            scores_locked = existing.scores_manually_edited
+            
+            if not scores_locked:
+                # Update scores from API
+                if home_sc is not None and home_sc != existing.home_score:
+                    existing.home_score = home_sc
+                    updated = True
+                if away_sc is not None and away_sc != existing.away_score:
+                    existing.away_score = away_sc
+                    updated = True
+                # Update status: if both scores present, mark finished; otherwise update status
+                if home_sc is not None and away_sc is not None:
+                    if existing.status != 'FINISHED':
+                        existing.status = 'FINISHED'
+                        updated = True
                 else:
-                    # --- NEW: try to reconcile a legacy/fallback row by teams + kickoff time ---
-                    from sqlalchemy import and_
-                    dt = fi['match_date']
-                    # 12h window to be tolerant of timezone differences
-                    lo = dt - timedelta(hours=12)
-                    hi = dt + timedelta(hours=12)
-                    legacy = (
-                        Fixture.query
-                        .filter(
-                            Fixture.season == fi['season'],
-                            func.lower(Fixture.home_team) == fi['home_team'].lower(),
-                            func.lower(Fixture.away_team) == fi['away_team'].lower(),
-                            Fixture.match_date >= lo,
-                            Fixture.match_date <= hi,
-                        )
-                        .order_by(Fixture.match_date.asc())
-                        .first()
+                    if fi['status'] != existing.status:
+                        existing.status = fi['status']
+                        updated = True
+
+            # Always update the kickoff time if the API differs significantly,
+            # regardless of manual edits (date/time changes are always allowed)
+            api_dt = fi['match_date']
+            if api_dt and existing.match_date:
+                # If the stored match_date differs by more than 60 seconds
+                # from the API-provided date, update it.
+                try:
+                    delta = abs((existing.match_date - api_dt).total_seconds())
+                except Exception:
+                    delta = None
+                if delta is not None and delta > 60:
+                    existing.match_date = api_dt
+                    updated = True
+
+            if updated:
+                db.session.add(existing)
+        else:
+            # --- NEW: try to reconcile a legacy/fallback row by teams + kickoff time ---
+            from sqlalchemy import and_
+            dt = fi['match_date']
+            # 12h window to be tolerant of timezone differences
+            lo = dt - timedelta(hours=12)
+            hi = dt + timedelta(hours=12)
+            legacy = (
+                Fixture.query
+                .filter(
+                    Fixture.season == fi['season'],
+                    func.lower(Fixture.home_team) == fi['home_team'].lower(),
+                    func.lower(Fixture.away_team) == fi['away_team'].lower(),
+                    Fixture.match_date >= lo,
+                    Fixture.match_date <= hi,
+                )
+                .order_by(Fixture.match_date.asc())
+                .first()
+            )
+            # If no match within the 12h window, try to locate an existing fixture
+            # by season + matchday + teams.  This helps reconcile provisional
+            # entries from the fallback when the league moves a match by more than
+            # a day.  We ignore the date here and only update fields.
+            if not legacy and fi.get('matchday'):
+                legacy = (
+                    Fixture.query
+                    .filter(
+                        Fixture.season == fi['season'],
+                        Fixture.matchday == fi['matchday'],
+                        func.lower(Fixture.home_team) == fi['home_team'].lower(),
+                        func.lower(Fixture.away_team) == fi['away_team'].lower(),
                     )
-                    # If no match within the 12h window, try to locate an existing fixture
-                    # by season + matchday + teams.  This helps reconcile provisional
-                    # entries from the fallback when the league moves a match by more than
-                    # a day.  We ignore the date here and only update fields.
-                    if not legacy and fi.get('matchday'):
-                        legacy = (
-                            Fixture.query
-                            .filter(
-                                Fixture.season == fi['season'],
-                                Fixture.matchday == fi['matchday'],
-                                func.lower(Fixture.home_team) == fi['home_team'].lower(),
-                                func.lower(Fixture.away_team) == fi['away_team'].lower(),
-                            )
-                            .order_by(Fixture.match_date.asc())
-                            .first()
-                        )
-                    if legacy:
-                        # Adopt the official API id and update fields in-place
-                        legacy.match_id = fi['match_id']
-                        manual = legacy.status and ('MANUAL' in legacy.status)
-                        if not manual:
-                            # Update scores and status when not overridden
-                            legacy.status = fi['status']
-                            legacy.home_score = fi['home_score']
-                            legacy.away_score = fi['away_score']
-                            # If both scores are present, override status to FINISHED
-                            if fi['home_score'] is not None and fi['away_score'] is not None:
-                                legacy.status = 'FINISHED'
-                            # Always update the match_date to the API-provided time if it
-                            # differs by more than a minute.  This handles both minor
-                            # adjustments and wholesale rescheduling.
-                            try:
-                                if abs((legacy.match_date - dt).total_seconds()) > 60:
-                                    legacy.match_date = dt
-                            except Exception:
-                                legacy.match_date = dt
-                        db.session.add(legacy)
-                    else:
-                        # No legacy row; insert fresh.  If both scores are
-                        # present then mark the fixture as finished; otherwise
-                        # use the API status as-is.
-                        home_sc = fi['home_score']
-                        away_sc = fi['away_score']
-                        status = fi['status']
-                        if home_sc is not None and away_sc is not None:
-                            status = 'FINISHED'
-                        db.session.add(Fixture(
-                            match_id=fi['match_id'],
-                            match_date=fi['match_date'],
-                            home_team=fi['home_team'],
-                            away_team=fi['away_team'],
-                            season=fi['season'],
-                            matchday=fi.get('matchday'),
-                            status=status,
-                            home_score=home_sc,
-                            away_score=away_sc,
-                        ))
+                    .order_by(Fixture.match_date.asc())
+                    .first()
+                )
+            if legacy:
+                # Adopt the official API id and update fields in-place
+                legacy.match_id = fi['match_id']
+                # Only update scores if not manually edited
+                if not legacy.scores_manually_edited:
+                    legacy.status = fi['status']
+                    legacy.home_score = fi['home_score']
+                    legacy.away_score = fi['away_score']
+                    # If both scores are present, override status to FINISHED
+                    if fi['home_score'] is not None and fi['away_score'] is not None:
+                        legacy.status = 'FINISHED'
+                # Always update the match_date to the API-provided time if it
+                # differs by more than a minute (date/time changes always allowed)
+                try:
+                    if abs((legacy.match_date - dt).total_seconds()) > 60:
+                        legacy.match_date = dt
+                except Exception:
+                    legacy.match_date = dt
+                db.session.add(legacy)
+            else:
+                # No legacy row; insert fresh.  If both scores are
+                # present then mark the fixture as finished; otherwise
+                # use the API status as-is.
+                home_sc = fi['home_score']
+                away_sc = fi['away_score']
+                status = fi['status']
+                if home_sc is not None and away_sc is not None:
+                    status = 'FINISHED'
+                db.session.add(Fixture(
+                    match_id=fi['match_id'],
+                    match_date=fi['match_date'],
+                    home_team=fi['home_team'],
+                    away_team=fi['away_team'],
+                    season=fi['season'],
+                    matchday=fi.get('matchday'),
+                    status=status,
+                    home_score=home_sc,
+                    away_score=away_sc,
+                    scores_manually_edited=False,
+                ))
         
     db.session.commit()
     evaluate_predictions()  # finalize finished games
@@ -586,8 +585,7 @@ def prediction_matrix(fixtures):
         fixture rows (with different ids but same match_id) to be matched
         against the current fixture list.
       show_flags: dict[fixture.id] -> bool indicating whether to reveal picks
-        for that fixture.  Picks are revealed if the fixture is in play,
-        paused, finished, or if kickoff time has passed.
+        for that fixture.  Picks are revealed once the kickoff time has passed.
     """
     if not fixtures:
         return [], {}, {}
@@ -621,22 +619,18 @@ def prediction_matrix(fixtures):
         if match_id:
             matrix[(match_id, uid)] = sel
 
-    # Compute reveal flags.  Predictions should be revealed only once the
-    # fixture has genuinely started or finished.  We rely on the official
-    # status codes from the API (IN_PLAY, PAUSED, FINISHED) and also
-    # consider a fixture to have started when a score has been recorded for
-    # either team.  We deliberately avoid revealing picks solely based on
-    # the scheduled kickoff time, because league reschedulings and API
-    # delays can cause mismatches between the timetable and the actual
-    # match start.
+    # Compute reveal flags.  Predictions should be revealed once the
+    # fixture kickoff time has passed, regardless of whether scores
+    # have been recorded yet.  This ensures users see each other's
+    # picks as soon as the match starts.
     show_flags = {}
+    now_utc = datetime.now(timezone.utc)
     for f in fixtures:
-        # Reveal predictions only when a final result has been recorded.
-        # We consider a fixture to be complete when both home and away
-        # scores are present.  Until then, picks remain hidden regardless
-        # of the scheduled kickoff time or live status.
-        result_recorded = (f.home_score is not None) and (f.away_score is not None)
-        show_flags[f.id] = result_recorded
+        kickoff = f.match_date
+        if kickoff.tzinfo is None:
+            kickoff = kickoff.replace(tzinfo=timezone.utc)
+        # Reveal predictions if kickoff time has passed
+        show_flags[f.id] = now_utc >= kickoff
 
     return users, matrix, show_flags
 
@@ -685,7 +679,7 @@ def evaluate_predictions() -> None:
                 db.session.add(prediction)
     db.session.commit()
 
-# Season/matchday helpers (unchanged)
+# Season/matchday helpers
 def seasons_available() -> list[str]:
     rows = db.session.query(Fixture.season).distinct().all()
     return sorted([r[0] for r in rows])
@@ -704,19 +698,42 @@ def matchdays_for(season: str) -> list[str]:
         return sorted(set(days))
 
 def latest_completed_matchday(season: str) -> str | None:
-    rows = (
-        db.session.query(Fixture.matchday)
-        .filter(Fixture.season == season, Fixture.status == "FINISHED")
-        .distinct()
-        .all()
-    )
-    days = [r[0] for r in rows if r[0]]
+    """
+    Find the latest matchday where all fixtures have recorded scores.
+    """
+    if not season:
+        return None
+    
+    days = matchdays_for(season)
     if not days:
         return None
+    
     try:
-        return str(max(int(d) for d in days))
+        sorted_days = [str(n) for n in sorted({int(d) for d in days}, reverse=True)]
     except Exception:
-        return sorted(set(days))[-1]
+        sorted_days = sorted(set(days), key=lambda s: (len(s), s), reverse=True)
+    
+    # Check each matchday from latest to earliest
+    for md in sorted_days:
+        # Get all fixtures for this matchday
+        fixtures = Fixture.query.filter(
+            Fixture.season == season,
+            Fixture.matchday == md
+        ).all()
+        
+        if not fixtures:
+            continue
+            
+        # Check if all fixtures have both scores recorded
+        all_complete = all(
+            (f.home_score is not None and f.away_score is not None)
+            for f in fixtures
+        )
+        
+        if all_complete:
+            return md
+    
+    return None
 
 def current_home_matchday(season: str) -> str | None:
     """
@@ -1053,9 +1070,9 @@ def history():
     """
     Display historical fixtures and predictions for a given season and matchday.
     This view allows users to browse finished matchdays.  Predictions are
-    always revealed regardless of kickoff time since the matches have
-    concluded.  If no matchday is specified, the latest completed
-    matchday for the chosen season (or current season) is used.
+    revealed once kickoff time has passed.  If no matchday is specified,
+    the latest completed matchday for the chosen season (or current season)
+    is used.
     """
     update_fixtures_adaptive()
 
@@ -1095,23 +1112,8 @@ def history():
 
     # Build the prediction matrix.  ``prediction_matrix`` returns a list of
     # users, a prediction mapping and a set of flags indicating when
-    # predictions should be revealed.  For the history view we rely on
-    # these flags so that picks remain hidden until kickoff.  This
-    # prevents revealing predictions for future fixtures if a user
-    # navigates to a not-yet-started matchday.
-    users_cols, pred_matrix, _show_flags = prediction_matrix(fixtures)
-    # Override show flags for the history view.  We want to reveal
-    # predictions once a fixture has actually begun or concluded.  In
-    # practice some APIs leave the status as TIMED/SCHEDULED even after
-    # kickoff or full‑time.  To avoid hiding picks in those cases, also
-    # reveal predictions when a final score is present.  This means
-    # users will see predictions for any fixture with a recorded result,
-    # or with a live/paused/finished status, but not for future games.
-    show_flags = {}
-    for f in fixtures:
-        reveal_by_status = f.status in ("IN_PLAY", "PAUSED", "FINISHED")
-        reveal_by_score = (f.home_score is not None and f.away_score is not None)
-        show_flags[f.id] = reveal_by_status or reveal_by_score
+    # predictions should be revealed (at kickoff time).
+    users_cols, pred_matrix, show_flags = prediction_matrix(fixtures)
 
     return render_template(
         "history.html",
@@ -1332,22 +1334,36 @@ def admin_update_result(fixture_id: int):
     if not fixture:
         flash("Fixture not found.", "danger")
         return redirect(url_for("admin_results"))
+    
     # Parse incoming scores; allow empty strings to clear the score
     def parse_score(s):
         try:
             return int(s) if s is not None and s != "" else None
         except Exception:
             return None
+    
     home_score = parse_score(request.form.get("home_score"))
     away_score = parse_score(request.form.get("away_score"))
-    fixture.home_score = home_score
-    fixture.away_score = away_score
+    
+    # Track if scores were edited
+    scores_changed = False
+    if home_score != fixture.home_score or away_score != fixture.away_score:
+        scores_changed = True
+        fixture.home_score = home_score
+        fixture.away_score = away_score
+        # Mark that scores were manually edited (prevents API overwrites)
+        fixture.scores_manually_edited = True
+        # Update status based on scores
+        if home_score is not None and away_score is not None:
+            fixture.status = 'FINISHED'
+        else:
+            fixture.status = 'TIMED'
+    
     # Optionally update match_date if provided
     match_date_str = request.form.get("match_date")
     if match_date_str:
         try:
             # Expect an ISO datetime without timezone (YYYY-MM-DDTHH:MM)
-            from datetime import datetime, timezone
             dt = datetime.fromisoformat(match_date_str)
             # If the parsed datetime is naive (no tzinfo), assume UTC
             if dt.tzinfo is None:
@@ -1355,22 +1371,18 @@ def admin_update_result(fixture_id: int):
             # Update match_date if the value has changed
             if fixture.match_date != dt:
                 fixture.match_date = dt
+                # Date/time changes do NOT set scores_manually_edited
+                # This allows API to update scores even after date edits
         except Exception:
             # Ignore invalid input; leave match_date unchanged
             pass
-    # Determine if this edit constitutes a manual override of scores or kickoff
-    manual_action = False
-    if (home_score is not None) or (away_score is not None) or match_date_str:
-        manual_action = True
-    if manual_action:
-        # Derive a base status: FINISHED if both scores present, otherwise TIMED
-        base_status = "FINISHED" if (home_score is not None and away_score is not None) else "TIMED"
-        fixture.status = f"{base_status}_MANUAL"
 
     db.session.add(fixture)
     db.session.commit()
+    
     # Re-evaluate predictions in case the outcome changed
     evaluate_predictions()
+    
     flash(f"Result and kickoff updated for {fixture.home_team} vs {fixture.away_team}.", "success")
     return redirect(url_for("admin_results", season=fixture.season, matchday=fixture.matchday))
 
