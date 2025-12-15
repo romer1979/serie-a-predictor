@@ -1,50 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!--
-      This is a self‑contained fixtures page for the Serie A predictor.  It uses
-      Bootstrap for sensible defaults and layout helpers and pairs it with
-      custom styles defined in ``styles.css`` to achieve a clean, dark‑themed
-      look on both desktop and mobile devices.  The page remains fully
-      compatible with the existing Flask/Jinja back‑end: Jinja expressions
-      (wrapped in double curly braces or percent blocks) are left intact so the
-      application can supply dynamic content at run time.  When opened
-      directly as a static HTML file the Jinja tags will simply be displayed
-      verbatim, but within the Flask app they will evaluate as intended.
-    -->
     <meta charset="utf-8">
-    <title>{{ season or 'Season' }} — Matchday {{ matchday or '—' }} · Serie A Predictor</title>
+    <title>{{ season or 'Season' }} — Matchday {{ matchday or '—' }} · Serie A Predictor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- Bootstrap CSS from a CDN.  Using a CDN avoids bundling the library
-         ourselves and ensures the page looks polished even if the parent
-         layout does not provide Bootstrap.  If your project already loads
-         Bootstrap elsewhere you can remove this link to avoid duplication. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-    <!-- Custom application styles.  When served through Flask the first
-         ``url_for`` call will expand to ``/static/styles.css``.  When opened
-         directly as a file the second relative link will load the CSS from
-         the current directory instead.  Including both ensures the page
-         styles correctly in both contexts. -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+      .postponed-badge {
+        background: rgba(255, 193, 7, 0.15);
+        color: #ffc107;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        text-decoration: none;
+      }
+      .postponed-badge:hover {
+        background: rgba(255, 193, 7, 0.25);
+        color: #ffc107;
+      }
+    </style>
 </head>
 <body class="bg-dark text-white">
 
 <!-- Primary navigation bar -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
   <div class="container-fluid">
-    <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+    <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navBar" aria-controls="navBar" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="navBar">
       <ul class="navbar-nav ms-auto">
-        <!-- Always show link to the leaderboard and history -->
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
         </li>
         {% if current_user.is_authenticated %}
         <li class="nav-item">
           <a class="nav-link" href="{{ url_for('history') }}">History</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('postponed_fixtures_view') }}">Postponed</a>
         </li>
         {% endif %}
         {% if current_user.is_authenticated and current_user.is_admin %}
@@ -58,7 +55,6 @@
             <a class="nav-link" href="{{ url_for('admin_results') }}">Edit results</a>
           </li>
         {% endif %}
-        <!-- Show login/register for anonymous users and logout for authenticated users -->
         {% if current_user.is_authenticated %}
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
@@ -77,29 +73,33 @@
 </nav>
 
 <div class="container my-4">
-    <!-- Wrap the entire fixture list in a single form so that all radio
-         buttons are submitted together.  The ``id`` and ``action``
-         attributes mirror the original template for compatibility. -->
     <form id="save-all" action="{{ url_for('save_all_predictions') }}" method="post" class="w-100">
 
-        <!-- Page header: season & matchday label on the left and a primary
-             save button on the right.  On mobile the two elements stack
-             naturally thanks to the ``flex-column`` class. -->
+        <!-- Page header -->
         <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3 gap-3">
-            <h1 class="h4 m-0">
-                {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
-            </h1>
+            <div>
+              <h1 class="h4 m-0">
+                  {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
+              </h1>
+              {% if postponed_count and postponed_count > 0 %}
+                <a href="{{ url_for('postponed_fixtures_view', season=season) }}" class="postponed-badge mt-2 d-inline-block">
+                  ⏸️ {{ postponed_count }} postponed fixture{{ 's' if postponed_count > 1 else '' }}
+                </a>
+              {% endif %}
+            </div>
             <button class="btn btn-primary save-all-predictions-btn" type="submit">💾 Save All Predictions</button>
         </div>
 
-        {# When there are no fixtures we show a friendly message inside a card. #}
         {% if fixtures|length == 0 %}
-          <div class="card table-card p-4 text-center">No fixtures for this matchday. Check back soon!</div>
+          <div class="card table-card p-4 text-center">
+            <p class="mb-2">No fixtures for this matchday.</p>
+            {% if postponed_count and postponed_count > 0 %}
+              <p class="text-muted small mb-0">Some fixtures may have been postponed. <a href="{{ url_for('postponed_fixtures_view', season=season) }}">View postponed fixtures</a></p>
+            {% else %}
+              <p class="text-muted small mb-0">Check back soon!</p>
+            {% endif %}
+          </div>
         {% else %}
-        <!-- The main fixtures table.  ``table-responsive`` ensures horizontal
-             scrolling on small screens without breaking the layout.  Column
-             widths are controlled via CSS (see ``styles.css``) but the
-             colgroup remains for semantic clarity. -->
         <div class="table-card">
             <div class="table-responsive">
                 <table class="table table-striped fixtures-table align-middle mb-0">
@@ -114,7 +114,6 @@
                     </colgroup>
                     <thead>
                         <tr>
-                            <!-- Hide the kickoff column on small screens with Bootstrap’s d-none/d-md-table-cell classes -->
                             <th class="th kickoff-col text-center d-none d-md-table-cell">Kickoff</th>
                             <th class="th">Match</th>
                             {% for uid, uname in users_cols %}
@@ -126,9 +125,7 @@
                     </thead>
                     <tbody>
                           {% for f in fixtures %}
-                          {# Prepare some helpers for each fixture. #}
                           {% set my = user_predictions.get(f.id) %}
-                          {# Use the stable match_id as the fixture key when looking up predictions. #}
                           {% set fkey = f.match_id or f.id %}
                           {% set locked = not f.is_open_for_prediction() %}
                           {% set reveal = show_preds_flags.get(f.id) %}
@@ -138,29 +135,18 @@
                             {% set outcome = None %}
                           {% endif %}
 
-                          <!-- Main row visible on both desktop and mobile.  It contains
-                               kickoff information, the match name and your pick, the
-                               other users’ picks (hidden on mobile), the result and the
-                               match status. -->
                           <tr>
-                            <!-- Kickoff: the date/time is populated client‑side using
-                                 JavaScript.  We render an ISO UTC timestamp on the
-                                 ``data-utc`` attribute and let the browser format it. -->
                             <td class="td kickoff text-center d-none d-md-table-cell">
                               <div class="kickoff-date" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}"></div>
                               <div class="kickoff-time"></div>
                             </td>
 
-                            <!-- Match name and your prediction.  The radio buttons are
-                                 arranged horizontally and disabled when the fixture is
-                                 locked. -->
                             <td class="td">
                               <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
-              <!-- Toggle link for mobile to show/hide picks -->
-              <a href="#" class="tiny toggle-picks d-md-none" data-target="picks-{{ f.id }}">Show picks</a>
-            <div class="choice"
-                   data-fixture-id="{{ f.id }}"
-                   data-initial="{{ my.selection if my else '' }}">
+                              <a href="#" class="tiny toggle-picks d-md-none" data-target="picks-{{ f.id }}">Show picks</a>
+                              <div class="choice"
+                                   data-fixture-id="{{ f.id }}"
+                                   data-initial="{{ my.selection if my else '' }}">
                                 {% for opt, label in [('1','1'),('X','X'),('2','2')] %}
                                   <label class="radio form-check-inline">
                                     <input type="radio"
@@ -174,16 +160,11 @@
                                 {% if locked and f.status != 'FINISHED' %}
                                   <span class="tiny muted">Locked</span>
                                 {% endif %}
-                                <!-- status badge to indicate whether a pick is saved, unsaved or missing -->
                                 <span class="pred-badge" id="pred-badge-{{ f.id }}"></span>
                               </div>
                             </td>
 
-                            <!-- One column per user (visible only on larger screens). -->
                             {% for uid, uname in users_cols %}
-                              {# Look up this user's pick using both keys: prefer match_id,
-                                 fall back to fixture.id.  This avoids missing predictions
-                                 when fixtures are re-imported and their internal IDs change. #}
                               {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
                               <td class="td desktop-only text-center">
                                 {% if reveal %}
@@ -194,7 +175,6 @@
                               </td>
                             {% endfor %}
 
-                            <!-- Result column.  Show a dash if the result is unknown. -->
                             <td class="td text-end">
                               {% if f.home_score is not none and f.away_score is not none %}
                                 <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
@@ -203,26 +183,22 @@
                               {% endif %}
                             </td>
 
-                            <!-- Status column: apply a colour coded pill based on the
-                                 return value of ``display_status``. -->
                             <td class="td text-center">
                               {% set s = f.display_status() %}
                               <span class="pill
                                           {% if s == 'LIVE' %} live
                                           {% elif s == 'FT' %} finished
+                                          {% elif s == 'PP' %} postponed
                                           {% else %} scheduled
                                           {% endif %}">{{ s }}</span>
                             </td>
                           </tr>
 
-                          <!-- Mobile only row: show all players’ picks in a single
-                               horizontally scrollable strip underneath the main row. -->
                           <tr id="picks-{{ f.id }}" class="mobile-picks-row d-none">
                             <td class="td" colspan="{{ 2 + users_cols|length + 2 }}">
                               {% if reveal %}
                                 <div class="predictions-strip">
                               {% for uid, uname in users_cols %}
-                                {# Use both keys for mobile picks as well #}
                                 {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
                                 <span class="mb-chip {{ 'pick-correct' if outcome and pick == outcome else '' }}">
                                   <span class="mb-name">{{ uname }}</span>
@@ -243,25 +219,14 @@
         </div>
         {% endif %}
 
-        <!-- Sticky save button.  On mobile it floats above the bottom of
-             the screen; on desktop it sits inline.  See ``styles.css`` for
-             placement details. -->
         <div class="sticky-save text-center mt-3">
           <button class="btn btn-primary save-all-predictions-btn" type="submit">💾 Save All Predictions</button>
         </div>
     </form>
 </div>
 
-<!-- Load Bootstrap’s JS bundle from the CDN.  This adds interactive
-     behaviours (collapse, dropdowns, etc.) should you choose to use them.  It
-     is deferred until the bottom of the page to avoid blocking rendering. -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// Localise each kickoff into two lines: date (top) + time (bottom).
-// These helper functions produce a short, locale‑aware representation
-// without forcing a specific timezone; the browser will pick the user’s
-// preferred locale.  You can customise the format or use your own
-// localisation library if desired.
 function fmtDate (iso) {
   const d = new Date(iso);
   return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
@@ -270,9 +235,6 @@ function fmtTime (iso) {
   const d = new Date(iso);
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
-// When the DOM is ready, iterate over all kickoff date elements and set
-// their contents based on the ``data-utc`` attribute.  This runs both
-// when served statically and via Flask.
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.kickoff-date').forEach(el => {
     const iso = el.getAttribute('data-utc');
@@ -282,20 +244,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (timeEl) timeEl.textContent = fmtTime(iso);
   });
 });
-// Prediction badge logic: show Saved/Unsaved/No pick states and update save
-// button label with the number of unsaved changes.  Each .choice element
-// stores the initial selection (if any) in a data attribute for easy
-// comparison with the current radio value.  A small pill to the right of
-// the radio group reflects the state of the pick.  The save button
-// displays a counter when there are unsaved picks.
+
 function setBadge (el, state) {
-  // Reset and assign appropriate classes
   el.className = 'pred-badge ' + (
     state === 'saved'   ? 'pred-saved' :
     state === 'unsaved' ? 'pred-unsaved' :
                           'pred-missing'
   );
-  // Set a concise text label
   el.textContent =
     state === 'saved'   ? 'Saved' :
     state === 'unsaved' ? 'Unsaved changes' :
@@ -319,51 +274,36 @@ function recomputeAllBadges () {
       unsavedCount++;
     }
   });
-  // Update all Save All Predictions buttons with unsaved count
   document.querySelectorAll('.save-all-predictions-btn').forEach(btn => {
     const base = '💾 Save All Predictions';
     btn.textContent = unsavedCount > 0 ? `${base} (${unsavedCount})` : base;
   });
 }
-// Attach change listeners to each radio input
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.choice input[type=radio]').forEach(r => {
     r.addEventListener('change', recomputeAllBadges);
   });
-  // Compute initial state once DOM is ready
   recomputeAllBadges();
 });
 
-  // Toggle predictions on mobile.  Each "Show picks" link carries a
-  // data-target attribute pointing at the id of the hidden picks row.  When
-  // the link is clicked we toggle the corresponding row’s visibility and
-  // update the link text between "Show picks" and "Hide picks".  This
-  // behaviour only affects mobile devices (the link is hidden on medium
-  // and larger screens via ``d-md-none``).  We wait until the DOM is
-  // ready to ensure the elements exist.
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('.toggle-picks').forEach(link => {
-      link.addEventListener('click', ev => {
-        ev.preventDefault();
-        const targetId = link.getAttribute('data-target');
-        if (!targetId) return;
-        const row = document.getElementById(targetId);
-        if (!row) return;
-        row.classList.toggle('d-none');
-        // Update the link text based on current state
-        if (row.classList.contains('d-none')) {
-          link.textContent = 'Show picks';
-        } else {
-          link.textContent = 'Hide picks';
-        }
-      });
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.toggle-picks').forEach(link => {
+    link.addEventListener('click', ev => {
+      ev.preventDefault();
+      const targetId = link.getAttribute('data-target');
+      if (!targetId) return;
+      const row = document.getElementById(targetId);
+      if (!row) return;
+      row.classList.toggle('d-none');
+      if (row.classList.contains('d-none')) {
+        link.textContent = 'Show picks';
+      } else {
+        link.textContent = 'Hide picks';
+      }
     });
   });
+});
 </script>
-    <!-- Include Bootstrap's JavaScript bundle so that the navbar toggler
-         and other interactive components work as expected.  Placing this
-         after your own scripts ensures Bootstrap is loaded but does not
-         override any application logic. -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
