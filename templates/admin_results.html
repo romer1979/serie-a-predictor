@@ -20,10 +20,35 @@
     .status-finished { background: rgba(25, 135, 84, 0.2); color: #198754; border: 1px solid rgba(25, 135, 84, 0.4); }
     .status-scheduled { background: rgba(108, 117, 125, 0.2); color: #6c757d; border: 1px solid rgba(108, 117, 125, 0.4); }
     .status-live { background: rgba(220, 53, 69, 0.2); color: #dc3545; border: 1px solid rgba(220, 53, 69, 0.4); }
-    .fixture-row.postponed { opacity: 0.7; background: rgba(255, 193, 7, 0.05); }
+    .fixture-row.postponed { opacity: 0.7; }
+    .fixture-row.postponed td { background: rgba(255, 193, 7, 0.05) !important; }
     .manual-badge { font-size: 0.65rem; background: rgba(13, 110, 253, 0.2); color: #0d6efd; }
     .notes-text { font-size: 0.8rem; color: #ffc107; font-style: italic; }
     .rescheduled-text { font-size: 0.8rem; color: #0dcaf0; }
+    
+    /* Fix table backgrounds for dark theme */
+    .results-table {
+      --bs-table-bg: transparent;
+      --bs-table-striped-bg: rgba(255, 255, 255, 0.02);
+      --bs-table-hover-bg: rgba(255, 255, 255, 0.04);
+      --bs-table-border-color: rgba(255, 255, 255, 0.1);
+    }
+    .results-table thead th {
+      background-color: rgba(255, 255, 255, 0.05) !important;
+      color: #f8f9fa !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+    .results-table tbody td {
+      background-color: transparent !important;
+      color: #f8f9fa !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+    .results-table tbody tr:nth-of-type(odd) td {
+      background-color: rgba(255, 255, 255, 0.02) !important;
+    }
+    .results-table tbody tr:hover td {
+      background-color: rgba(255, 255, 255, 0.04) !important;
+    }
   </style>
 </head>
 <body class="bg-dark text-white">
@@ -89,7 +114,7 @@
 
     {% if fixtures %}
     <div class="table-responsive">
-      <table class="table table-striped table-bordered align-middle table-card">
+      <table class="table table-striped table-bordered align-middle table-card results-table">
         <thead>
           <tr>
             <th class="th text-center" style="width: 100px;">Kickoff</th>
