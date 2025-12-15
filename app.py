@@ -1520,6 +1520,9 @@ def add_postponed_columns() -> None:
     columns = [c['name'] for c in inspector.get_columns('fixtures')]
     
     with db.engine.connect() as conn:
+        if 'scores_manually_edited' not in columns:
+            conn.execute(text('ALTER TABLE fixtures ADD COLUMN scores_manually_edited BOOLEAN DEFAULT FALSE'))
+            print("Added scores_manually_edited column")
         if 'status_manually_edited' not in columns:
             conn.execute(text('ALTER TABLE fixtures ADD COLUMN status_manually_edited BOOLEAN DEFAULT FALSE'))
             print("Added status_manually_edited column")
@@ -1536,6 +1539,40 @@ def add_postponed_columns() -> None:
 # Ensure DB tables exist on startup
 with app.app_context():
     db.create_all()
+
+# Automatic migration: add any missing columns to existing tables
+# This runs on every startup to ensure schema is up-to-date
+with app.app_context():
+    from sqlalchemy import inspect, text
+    try:
+        inspector = inspect(db.engine)
+        if 'fixtures' in inspector.get_table_names():
+            columns = [c['name'] for c in inspector.get_columns('fixtures')]
+            
+            with db.engine.connect() as conn:
+                # Add scores_manually_edited if missing (original feature)
+                if 'scores_manually_edited' not in columns:
+                    conn.execute(text('ALTER TABLE fixtures ADD COLUMN scores_manually_edited BOOLEAN DEFAULT FALSE'))
+                    print("[MIGRATION] Added scores_manually_edited column")
+                
+                # Add status_manually_edited if missing (postponed feature)
+                if 'status_manually_edited' not in columns:
+                    conn.execute(text('ALTER TABLE fixtures ADD COLUMN status_manually_edited BOOLEAN DEFAULT FALSE'))
+                    print("[MIGRATION] Added status_manually_edited column")
+                
+                # Add rescheduled_date if missing (postponed feature)
+                if 'rescheduled_date' not in columns:
+                    conn.execute(text('ALTER TABLE fixtures ADD COLUMN rescheduled_date TIMESTAMP'))
+                    print("[MIGRATION] Added rescheduled_date column")
+                
+                # Add admin_notes if missing (postponed feature)
+                if 'admin_notes' not in columns:
+                    conn.execute(text('ALTER TABLE fixtures ADD COLUMN admin_notes VARCHAR'))
+                    print("[MIGRATION] Added admin_notes column")
+                
+                conn.commit()
+    except Exception as e:
+        print(f"[MIGRATION] Warning: Could not check/add columns: {e}")
 
 # Optional bootstrap via env variables
 with app.app_context():
