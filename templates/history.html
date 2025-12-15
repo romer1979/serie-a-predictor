@@ -1,12 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Self‑contained history page for viewing past matchday fixtures and predictions.
-       This page mirrors the look and feel of the fixtures page but removes
-       prediction input.  It presents read‑only results and picks for
-       completed games. -->
   <meta charset="utf-8">
-  <title>History · Serie A Predictor</title>
+  <title>History · Serie A Predictor</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <!-- Bootstrap CSS -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
@@ -14,10 +10,10 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body class="bg-dark text-white">
-  <!-- Navigation bar.  The History link is active on this page. -->
+  <!-- Navigation bar -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
     <div class="container-fluid">
-      <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+      <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navHistory" aria-controls="navHistory" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
@@ -29,9 +25,11 @@
           <li class="nav-item">
             <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
           </li>
-          <!-- Highlight history link -->
           <li class="nav-item">
             <a class="nav-link active" aria-current="page" href="{{ url_for('history') }}">History</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('postponed_fixtures_view') }}">Postponed</a>
           </li>
           {% if current_user.is_authenticated and current_user.is_admin %}
             <li class="nav-item">
@@ -65,14 +63,14 @@
     <!-- Header with season and matchday selection -->
     <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3 gap-3">
       <h1 class="h4 m-0">History — Season {{ season }}{% if matchday %}, Matchday {{ matchday }}{% endif %}</h1>
-      <!-- Refresh button to update fixture dates/times.  Posts to history_refresh -->
       <form method="post" action="{{ url_for('history_refresh') }}" class="mt-2 mt-md-0">
         <input type="hidden" name="season" value="{{ season }}">
         <input type="hidden" name="matchday" value="{{ matchday }}">
         <button type="submit" class="btn btn-sm btn-secondary">Refresh</button>
       </form>
     </div>
-    <!-- Filter controls: choose season and matchday.  Changing either reloads the page -->
+    
+    <!-- Filter controls -->
     <form method="get" class="row g-3 align-items-end mb-4">
       <div class="col-auto">
         <label for="season" class="form-label">Season</label>
@@ -91,7 +89,7 @@
         </select>
       </div>
     </form>
-    <!-- If there are no fixtures, show a friendly message -->
+    
     {% if fixtures|length == 0 %}
       <div class="card table-card p-4 text-center">No fixtures available for the selected matchday.</div>
     {% else %}
@@ -99,7 +97,6 @@
     <div class="table-card">
       <div class="table-responsive">
         <table class="table table-striped align-middle mb-0">
-          <!-- Column widths replicate those on the fixtures page -->
           <colgroup>
             <col class="col-kickoff">
             <col class="col-match">
@@ -123,27 +120,25 @@
           <tbody>
             {% for f in fixtures %}
               {% set reveal = show_preds_flags.get(f.id) %}
-              {# Determine the stable key for this fixture (match_id or id). #}
               {% set fkey = f.match_id or f.id %}
               {% if f.home_score is not none and f.away_score is not none %}
                 {% set outcome = '1' if f.home_score > f.away_score else ('2' if f.away_score > f.home_score else 'X') %}
               {% else %}
                 {% set outcome = None %}
               {% endif %}
-              <!-- Primary row: kickoff, match title, user picks, result and status -->
-              <tr>
-                <!-- Kickoff localised client‑side like the fixtures page -->
+              
+              <tr class="{% if f.status in ('POSTPONED', 'CANCELLED', 'SUSPENDED') %}opacity-50{% endif %}">
                 <td class="td kickoff text-center">
                   <div class="kickoff-date" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}"></div>
                   <div class="kickoff-time"></div>
                 </td>
-                <!-- Match title -->
                 <td class="td">
                   <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+                  {% if f.admin_notes %}
+                    <div class="tiny text-warning">📝 {{ f.admin_notes }}</div>
+                  {% endif %}
                 </td>
-                <!-- User picks: reveal only when show flag is true -->
                 {% for uid, uname in users_cols %}
-                  {# Try both match_id and fixture.id when looking up predictions #}
                   {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
                   <td class="td desktop-only text-center">
                     {% if reveal %}
@@ -153,7 +148,6 @@
                     {% endif %}
                   </td>
                 {% endfor %}
-                <!-- Result -->
                 <td class="td text-end">
                   {% if f.home_score is not none and f.away_score is not none %}
                     <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
@@ -161,23 +155,24 @@
                     <span class="muted">—</span>
                   {% endif %}
                 </td>
-                <!-- Status -->
                 <td class="td text-center">
                   {% set s = f.display_status() %}
                   <span class="pill
                               {% if s == 'LIVE' %} live
                               {% elif s == 'FT' %} finished
+                              {% elif s == 'PP' %} postponed
+                              {% elif s == 'CANC' %} postponed
+                              {% elif s == 'SUSP' %} postponed
                               {% else %} scheduled
                               {% endif %}">{{ s }}</span>
                 </td>
               </tr>
-              <!-- Mobile row: predictions strip for small screens -->
+              <!-- Mobile row -->
               <tr class="mobile-picks-row">
                 <td class="td" colspan="{{ 2 + users_cols|length + 2 }}">
                   {% if reveal %}
                     <div class="predictions-strip">
                   {% for uid, uname in users_cols %}
-                        {# Try both keys for mobile picks #}
                         {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
                         <span class="mb-chip {{ 'pick-correct' if outcome and pick == outcome else '' }}">
                           <span class="mb-name">{{ uname }}</span>
@@ -201,7 +196,6 @@
 
   <!-- Bootstrap JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- Reuse the kickoff localisation script from the fixtures page. -->
   <script>
   function fmtDate (iso) {
     const d = new Date(iso);
