@@ -6,6 +6,7 @@ Key changes:
 - Manual date/time edits allow score updates from API
 - Predictions lock at kickoff time (not when results are available)
 - Predictions are revealed at kickoff time (not when results are available)
+- POSTPONED status support for fixtures
 """
 
 import os
@@ -67,6 +68,23 @@ login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
 # -----------------------------------------------------------------------------
+# Valid fixture statuses
+# -----------------------------------------------------------------------------
+FIXTURE_STATUSES = (
+    "SCHEDULED",   # Not yet started, time confirmed
+    "TIMED",       # Not yet started, time confirmed (API variant)
+    "IN_PLAY",     # Currently playing
+    "PAUSED",      # Half-time or other pause
+    "FINISHED",    # Match completed
+    "POSTPONED",   # Match postponed to a later date
+    "CANCELLED",   # Match cancelled entirely
+    "SUSPENDED",   # Match suspended mid-game
+)
+
+# Statuses that indicate the fixture should be excluded from "current" view
+EXCLUDED_FROM_CURRENT = ("POSTPONED", "CANCELLED", "SUSPENDED")
+
+# -----------------------------------------------------------------------------
 # Jinja filters
 # -----------------------------------------------------------------------------
 
@@ -106,19 +124,10 @@ class User(db.Model, UserMixin):
     def points(self) -> int:
         """
         Total points across all predictions for this user.
-
-        A user earns 1 point for each correct prediction: a home win ("1") if
-        the home team's final score is greater than the away team's, a draw
-        ("X") if the scores are equal, and an away win ("2") if the away
-        team scores more.  This calculation does not rely on the
-        ``points_awarded`` column; instead it computes correctness on the
-        fly using the associated fixture's final scores.  Predictions for
-        fixtures without recorded scores contribute 0 points.
         """
         total = 0
         for pred in self.predictions:
             fix = pred.fixture
-            # Skip fixtures without a recorded final score
             if fix is None or fix.home_score is None or fix.away_score is None:
                 continue
             outcome = fix.outcome_code()
@@ -138,16 +147,21 @@ class Fixture(db.Model):
     __tablename__ = "fixtures"
     id = db.Column(db.Integer, primary_key=True)
     match_id = db.Column(db.String, unique=True, nullable=False)
-    match_date = db.Column(db.DateTime, nullable=False)  # stored in UTC (aware or naive UTC)
+    match_date = db.Column(db.DateTime, nullable=False)  # Original scheduled date (UTC)
     home_team = db.Column(db.String, nullable=False)
     away_team = db.Column(db.String, nullable=False)
     season = db.Column(db.String, nullable=False)
     matchday = db.Column(db.String, nullable=True)
-    status = db.Column(db.String, default="SCHEDULED")  # SCHEDULED/TIMED/IN_PLAY/PAUSED/FINISHED
+    status = db.Column(db.String, default="SCHEDULED")  # SCHEDULED/TIMED/IN_PLAY/PAUSED/FINISHED/POSTPONED/CANCELLED/SUSPENDED
     home_score = db.Column(db.Integer, nullable=True)
     away_score = db.Column(db.Integer, nullable=True)
-    # New field to track manual score edits
+    # Track manual edits
     scores_manually_edited = db.Column(db.Boolean, default=False)
+    status_manually_edited = db.Column(db.Boolean, default=False)
+    # For postponed fixtures: the new scheduled date (if known)
+    rescheduled_date = db.Column(db.DateTime, nullable=True)
+    # Notes for admin (e.g., "Postponed due to weather")
+    admin_notes = db.Column(db.String, nullable=True)
 
     predictions = db.relationship("Prediction", back_populates="fixture", cascade="all, delete-orphan")
 
@@ -160,55 +174,67 @@ class Fixture(db.Model):
             return "2"
         return "X"
 
+    def is_postponed(self) -> bool:
+        """Check if the fixture is postponed, cancelled, or suspended."""
+        return self.status in EXCLUDED_FROM_CURRENT
+
     def is_open_for_prediction(self) -> bool:
         """
         Determine whether predictions can still be made for this fixture.
-
-        Predictions are locked once the match kickoff time has passed.
-        This ensures users cannot make or change predictions after the
-        game has started, regardless of whether results have been recorded.
-
-        Returns False if kickoff time has passed; otherwise returns True.
+        
+        Predictions are locked once the match kickoff time has passed,
+        OR if the fixture is postponed/cancelled/suspended.
         """
+        # Can't predict on postponed/cancelled fixtures
+        if self.is_postponed():
+            return False
+            
         now_utc = datetime.now(timezone.utc)
-        # Ensure match_date is timezone-aware for comparison
         kickoff = self.match_date
         if kickoff.tzinfo is None:
             kickoff = kickoff.replace(tzinfo=timezone.utc)
-        # Lock predictions if kickoff time has passed
         return now_utc < kickoff
 
     def display_status(self) -> str:
         """
         Human-friendly status for display in the UI.
-
-        We prioritise official status codes and recorded scores rather than
-        inferring match state solely from the scheduled kickoff time.  A
-        fixture is considered:
-
-          * ``LIVE`` when the API reports ``IN_PLAY`` or ``PAUSED``.
-          * ``FT`` (full time) when the API reports ``FINISHED`` or when
-            final scores have been recorded for both teams.
-          * ``TIMED`` otherwise (including ``SCHEDULED`` and ``TIMED``).
-
-        This avoids showing ``LIVE`` for fixtures that have not yet begun,
-        even if the scheduled kickoff time has passed and the API has not
-        updated the status.  It also ensures that fixtures with recorded
-        scores but an outdated status are marked as finished.
         """
-        # If both scores are present, treat as finished regardless of status.
+        # Handle postponed/cancelled/suspended first
+        if self.status == 'POSTPONED':
+            return 'PP'  # Short for postponed
+        if self.status == 'CANCELLED':
+            return 'CANC'
+        if self.status == 'SUSPENDED':
+            return 'SUSP'
+            
+        # If both scores are present, treat as finished
         if (self.home_score is not None) and (self.away_score is not None):
             return 'FT'
-        # Strip any manual suffix from status (e.g., FINISHED_MANUAL)
-        status = self.status or ''
-        base = status.split('_')[0] if '_' in status else status
-        # Use explicit API statuses.
+            
+        base = self.status.split('_')[0] if '_' in (self.status or '') else (self.status or '')
+        
         if base in ('IN_PLAY', 'PAUSED'):
             return 'LIVE'
         if base == 'FINISHED':
             return 'FT'
-        # For SCHEDULED or TIMED statuses (or any other), show TIMED.
         return 'TIMED'
+
+    def display_status_long(self) -> str:
+        """
+        Longer human-friendly status for tooltips and admin views.
+        """
+        status_map = {
+            'SCHEDULED': 'Scheduled',
+            'TIMED': 'Scheduled',
+            'IN_PLAY': 'Live',
+            'PAUSED': 'Half-time',
+            'FINISHED': 'Full Time',
+            'POSTPONED': 'Postponed',
+            'CANCELLED': 'Cancelled',
+            'SUSPENDED': 'Suspended',
+        }
+        return status_map.get(self.status, self.status or 'Unknown')
+
 
 class Prediction(db.Model):
     __tablename__ = "predictions"
@@ -216,7 +242,7 @@ class Prediction(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"))
     fixture_id = db.Column(db.Integer, db.ForeignKey("fixtures.id"))
     selection = db.Column(db.String, nullable=False)  # '1', 'X', or '2'
-    points_awarded = db.Column(db.Integer, nullable=True)  # 1 for correct, 0 for incorrect, None until evaluated
+    points_awarded = db.Column(db.Integer, nullable=True)
     timestamp = db.Column(db.DateTime, default=lambda: datetime.now(ZoneInfo("America/New_York")))
 
     user = db.relationship("User", back_populates="predictions")
@@ -258,18 +284,17 @@ def fetch_fixtures_from_api() -> list[dict]:
     fixtures: list[dict] = []
     for match in data.get("matches", []):
         status = match.get("status")
-        if status not in ("SCHEDULED", "TIMED", "IN_PLAY", "PAUSED", "FINISHED"):
+        # Include POSTPONED status from API
+        if status not in ("SCHEDULED", "TIMED", "IN_PLAY", "PAUSED", "FINISHED", "POSTPONED", "CANCELLED", "SUSPENDED"):
             continue
-        utc_date_str = match["utcDate"]  # e.g. '2025-08-23T18:45:00Z'
+        utc_date_str = match["utcDate"]
         utc_dt = datetime.fromisoformat(utc_date_str.replace("Z", "+00:00"))
-        # Scores: if live or finished, football-data provides live or full-time in score
+        
         score = match.get("score", {}) or {}
         ft = score.get("fullTime") or {}
         home_ft = ft.get("home")
         away_ft = ft.get("away")
 
-        # For IN_PLAY / PAUSED they often populate "fullTime" as None but "halfTime"/"duration"/"winner" etc.
-        # We'll also check "regularTime" if available:
         if home_ft is None or away_ft is None:
             reg = score.get("regularTime") or {}
             home_ft = reg.get("home") if home_ft is None else home_ft
@@ -277,7 +302,7 @@ def fetch_fixtures_from_api() -> list[dict]:
 
         fixtures.append({
             "match_id": str(match["id"]),
-            "match_date": utc_dt,  # KEEP IN UTC
+            "match_date": utc_dt,
             "home_team": match["homeTeam"]["name"],
             "away_team": match["awayTeam"]["name"],
             "season": season_str,
@@ -290,7 +315,6 @@ def fetch_fixtures_from_api() -> list[dict]:
 
 
 def fetch_fixtures_from_fallback() -> list[dict]:
-    # Your repo path (adjust if your fallback lives elsewhere)
     fallback_path = Path(__file__).resolve().parent / "data" / "seriea_2024_25.json"
     if not fallback_path.exists():
         return []
@@ -302,37 +326,45 @@ def fetch_fixtures_from_fallback() -> list[dict]:
     for match in season_data.get("matches", []):
         score = match.get("score", {})
         ft = score.get("ft")
-        if not ft:
-            date_str = match["date"]
-            time_str = match.get("time", "18:00")
-            # Europe/Rome -> UTC
-            dt_naive = datetime.fromisoformat(f"{date_str}T{time_str}")
-            dt_rome = dt_naive.replace(tzinfo=ZoneInfo("Europe/Rome"))
-            utc_dt = dt_rome.astimezone(timezone.utc)
-            fixtures.append({
-                "match_id": f"{date_str}-{match['team1']}-{match['team2']}",
-                "match_date": utc_dt,
-                "home_team": match["team1"],
-                "away_team": match["team2"],
-                "season": season_data.get("name", "2024/25"),
-                "matchday": match.get("round"),
-                "status": "SCHEDULED",
-                "home_score": None,
-                "away_score": None,
-            })
+        
+        date_str = match["date"]
+        time_str = match.get("time", "18:00")
+        dt_naive = datetime.fromisoformat(f"{date_str}T{time_str}")
+        dt_rome = dt_naive.replace(tzinfo=ZoneInfo("Europe/Rome"))
+        utc_dt = dt_rome.astimezone(timezone.utc)
+        
+        # Determine status based on score availability
+        if ft:
+            status = "FINISHED"
+            home_score = ft[0]
+            away_score = ft[1]
+        else:
+            status = "SCHEDULED"
+            home_score = None
+            away_score = None
+            
+        fixtures.append({
+            "match_id": f"{date_str}-{match['team1']}-{match['team2']}",
+            "match_date": utc_dt,
+            "home_team": match["team1"],
+            "away_team": match["team2"],
+            "season": season_data.get("name", "2024/25"),
+            "matchday": match.get("round"),
+            "status": status,
+            "home_score": home_score,
+            "away_score": away_score,
+        })
     return fixtures
 
 
 def update_fixtures() -> None:
     """
     Sync local fixtures with API (if key present) or fallback file.
-    Insert new fixtures; update status/scores on existing ones.
-    Then evaluate predictions for finished matches.
     
-    IMPORTANT: Only skip score updates when scores_manually_edited is True.
-    Always allow date/time updates even for manually edited fixtures.
+    IMPORTANT: 
+    - Skip updates for fixtures where status_manually_edited is True
+    - Only skip score updates when scores_manually_edited is True
     """
-    # Ensure any new columns exist before we begin updates.  Safe to call repeatedly.
     try:
         db.create_all()
     except Exception:
@@ -345,39 +377,36 @@ def update_fixtures() -> None:
         existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
         if existing:
             updated = False
-            # Update status and scores on the existing fixture.
-            # Only skip score updates if scores were manually edited.
-            # Always allow date/time updates.
+            
+            # Skip all updates if status was manually edited (e.g., marked as POSTPONED)
+            if existing.status_manually_edited:
+                continue
+                
             home_sc = fi['home_score']
             away_sc = fi['away_score']
-            
-            # Check if scores were manually edited (not date/time)
             scores_locked = existing.scores_manually_edited
             
             if not scores_locked:
-                # Update scores from API
                 if home_sc is not None and home_sc != existing.home_score:
                     existing.home_score = home_sc
                     updated = True
                 if away_sc is not None and away_sc != existing.away_score:
                     existing.away_score = away_sc
                     updated = True
-                # Update status: if both scores present, mark finished; otherwise update status
+                    
+                # Update status from API (including POSTPONED)
+                if fi['status'] != existing.status:
+                    existing.status = fi['status']
+                    updated = True
+                    
                 if home_sc is not None and away_sc is not None:
                     if existing.status != 'FINISHED':
                         existing.status = 'FINISHED'
                         updated = True
-                else:
-                    if fi['status'] != existing.status:
-                        existing.status = fi['status']
-                        updated = True
 
-            # Always update the kickoff time if the API differs significantly,
-            # regardless of manual edits (date/time changes are always allowed)
+            # Update kickoff time if different
             api_dt = fi['match_date']
             if api_dt and existing.match_date:
-                # If the stored match_date differs by more than 60 seconds
-                # from the API-provided date, update it.
                 try:
                     delta = abs((existing.match_date - api_dt).total_seconds())
                 except Exception:
@@ -389,10 +418,9 @@ def update_fixtures() -> None:
             if updated:
                 db.session.add(existing)
         else:
-            # --- NEW: try to reconcile a legacy/fallback row by teams + kickoff time ---
+            # Try to reconcile legacy row
             from sqlalchemy import and_
             dt = fi['match_date']
-            # 12h window to be tolerant of timezone differences
             lo = dt - timedelta(hours=12)
             hi = dt + timedelta(hours=12)
             legacy = (
@@ -407,10 +435,7 @@ def update_fixtures() -> None:
                 .order_by(Fixture.match_date.asc())
                 .first()
             )
-            # If no match within the 12h window, try to locate an existing fixture
-            # by season + matchday + teams.  This helps reconcile provisional
-            # entries from the fallback when the league moves a match by more than
-            # a day.  We ignore the date here and only update fields.
+            
             if not legacy and fi.get('matchday'):
                 legacy = (
                     Fixture.query
@@ -423,19 +448,19 @@ def update_fixtures() -> None:
                     .order_by(Fixture.match_date.asc())
                     .first()
                 )
+                
             if legacy:
-                # Adopt the official API id and update fields in-place
+                # Don't update if manually edited
+                if legacy.status_manually_edited:
+                    continue
+                    
                 legacy.match_id = fi['match_id']
-                # Only update scores if not manually edited
                 if not legacy.scores_manually_edited:
                     legacy.status = fi['status']
                     legacy.home_score = fi['home_score']
                     legacy.away_score = fi['away_score']
-                    # If both scores are present, override status to FINISHED
                     if fi['home_score'] is not None and fi['away_score'] is not None:
                         legacy.status = 'FINISHED'
-                # Always update the match_date to the API-provided time if it
-                # differs by more than a minute (date/time changes always allowed)
                 try:
                     if abs((legacy.match_date - dt).total_seconds()) > 60:
                         legacy.match_date = dt
@@ -443,9 +468,6 @@ def update_fixtures() -> None:
                     legacy.match_date = dt
                 db.session.add(legacy)
             else:
-                # No legacy row; insert fresh.  If both scores are
-                # present then mark the fixture as finished; otherwise
-                # use the API status as-is.
                 home_sc = fi['home_score']
                 away_sc = fi['away_score']
                 status = fi['status']
@@ -462,43 +484,51 @@ def update_fixtures() -> None:
                     home_score=home_sc,
                     away_score=away_sc,
                     scores_manually_edited=False,
+                    status_manually_edited=False,
                 ))
         
     db.session.commit()
-    evaluate_predictions()  # finalize finished games
+    evaluate_predictions()
 
 
-# --- Adaptive fetch throttle (poll more often around live games) ---
+# --- Adaptive fetch throttle ---
 
 FETCH_STATE = {"last_run": None, "last_interval": None}
 
 def _adaptive_min_interval() -> timedelta:
     now_utc = datetime.now(timezone.utc)
 
-    # Poll every 60s when there are live games or within 2 hours of kickoff
     live = Fixture.query.filter(Fixture.status.in_(("IN_PLAY", "PAUSED"))).count()
     if live > 0:
         return timedelta(seconds=60)
 
     soon = (
         Fixture.query
-        .filter(Fixture.match_date >= now_utc, Fixture.match_date <= now_utc + timedelta(hours=2))
+        .filter(
+            Fixture.match_date >= now_utc,
+            Fixture.match_date <= now_utc + timedelta(hours=2),
+            ~Fixture.status.in_(EXCLUDED_FROM_CURRENT)
+        )
         .count()
     )
     if soon > 0:
         return timedelta(seconds=60)
 
-    # On match days, lighter polling
     today_end_utc = now_utc.replace(hour=23, minute=59, second=59, microsecond=999999)
     today = (
         Fixture.query
-        .filter(Fixture.match_date >= now_utc, Fixture.match_date <= today_end_utc)
+        .filter(
+            Fixture.match_date >= now_utc,
+            Fixture.match_date <= today_end_utc,
+            ~Fixture.status.in_(EXCLUDED_FROM_CURRENT)
+        )
         .count()
     )
     if today > 0:
         return timedelta(seconds=60)
 
     return timedelta(hours=24)
+
 
 def update_fixtures_adaptive(force: bool = False) -> None:
     now_utc = datetime.now(timezone.utc)
@@ -516,46 +546,60 @@ def update_fixtures_adaptive(force: bool = False) -> None:
 # Queries / helpers
 # -----------------------------------------------------------------------------
 
-def upcoming_fixtures() -> list[Fixture]:
+def upcoming_fixtures(exclude_postponed: bool = True) -> list[Fixture]:
     """
     Return fixtures to show on the main page.
-
-    IMPORTANT: include *live/just-started* games so they don't "disappear".
-    We include fixtures from 6 hours *before* now up to 7 days ahead,
-    and then also include the rest of the first upcoming matchday for context.
+    
+    By default, excludes postponed/cancelled/suspended fixtures.
     """
     now_utc = datetime.now(timezone.utc)
-    window_start = now_utc - timedelta(hours=6)    # keep games that just kicked off
+    window_start = now_utc - timedelta(hours=6)
     window_end = now_utc + timedelta(days=7)
 
-    base = (
-        Fixture.query.filter(
-            Fixture.match_date >= window_start,
-            Fixture.match_date <= window_end
-        ).all()
+    query = Fixture.query.filter(
+        Fixture.match_date >= window_start,
+        Fixture.match_date <= window_end
     )
+    
+    if exclude_postponed:
+        query = query.filter(~Fixture.status.in_(EXCLUDED_FROM_CURRENT))
+    
+    base = query.all()
 
-    # Pull entire first upcoming matchday (by kickoff) if one exists,
-    # so the page shows the whole round together.
-    first_upcoming = (
+    # Pull entire first upcoming matchday
+    first_upcoming_query = (
         Fixture.query.filter(
             Fixture.status.in_(("SCHEDULED", "TIMED")),
             Fixture.match_date >= now_utc
         )
-        .order_by(Fixture.match_date.asc())
-        .first()
     )
+    if exclude_postponed:
+        first_upcoming_query = first_upcoming_query.filter(~Fixture.status.in_(EXCLUDED_FROM_CURRENT))
+    
+    first_upcoming = first_upcoming_query.order_by(Fixture.match_date.asc()).first()
 
     week1 = []
     if first_upcoming and first_upcoming.matchday:
-        week1 = Fixture.query.filter(
-            Fixture.matchday == first_upcoming.matchday
-        ).all()
+        week1_query = Fixture.query.filter(Fixture.matchday == first_upcoming.matchday)
+        if exclude_postponed:
+            week1_query = week1_query.filter(~Fixture.status.in_(EXCLUDED_FROM_CURRENT))
+        week1 = week1_query.all()
 
     merged = {f.id: f for f in base}
     for f in week1:
         merged[f.id] = f
     return sorted(merged.values(), key=lambda f: f.match_date)
+
+
+def get_postponed_fixtures(season: str = None) -> list[Fixture]:
+    """
+    Get all postponed/cancelled/suspended fixtures, optionally filtered by season.
+    """
+    query = Fixture.query.filter(Fixture.status.in_(EXCLUDED_FROM_CURRENT))
+    if season:
+        query = query.filter(Fixture.season == season)
+    return query.order_by(Fixture.match_date.asc()).all()
+
 
 def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[str, str]]]:
     if not fixtures:
@@ -573,25 +617,13 @@ def predictions_for_fixtures(fixtures: list[Fixture]) -> dict[int, list[tuple[st
         out.setdefault(fixture_id, []).append((username, selection))
     return out
 
-def prediction_matrix(fixtures):
-    """
-    Build the prediction matrix for a list of Fixture objects.
 
-    Returns:
-      users: list of (user_id, username) sorted alphabetically by username
-      matrix: dict keyed by (fixture_key, user_id) -> prediction ('1','X','2')
-        where fixture_key is the stable match_id if available, falling back to
-        the internal fixture.id.  This allows predictions attached to older
-        fixture rows (with different ids but same match_id) to be matched
-        against the current fixture list.
-      show_flags: dict[fixture.id] -> bool indicating whether to reveal picks
-        for that fixture.  Picks are revealed once the kickoff time has passed.
-    """
+def prediction_matrix(fixtures):
+    """Build the prediction matrix for a list of Fixture objects."""
     if not fixtures:
         return [], {}, {}
 
     fix_ids = [f.id for f in fixtures]
-    # Join Users, Predictions and Fixtures to obtain match_id for each prediction.
     rows = (
         db.session.query(User.id, User.username, Prediction.fixture_id, Prediction.selection, Fixture.match_id)
         .join(Prediction, Prediction.user_id == User.id)
@@ -600,63 +632,30 @@ def prediction_matrix(fixtures):
         .all()
     )
 
-    # Build a unique sorted list of users who made predictions for these fixtures.
     user_set = {}
     for uid, uname, _, _, _ in rows:
         user_set[uid] = uname
     users = sorted(user_set.items(), key=lambda t: t[1].lower())
 
-    # Build the matrix keyed by both (fixture_id, user_id) and (match_id, user_id).
-    # We prefer match_id when present (it stays constant across re-imports),
-    # but also store predictions under the internal fixture.id to support
-    # legacy rows or templates that still index by id.  Without this dual
-    # mapping, re-importing fixtures can cause historical picks to vanish.
     matrix: dict[tuple[str|int,int], str] = {}
     for uid, uname, fid, sel, match_id in rows:
-        # Always store under the internal fixture.id
         matrix[(fid, uid)] = sel
-        # Additionally, store under the stable match_id when available
         if match_id:
             matrix[(match_id, uid)] = sel
 
-    # Compute reveal flags.  Predictions should be revealed once the
-    # fixture kickoff time has passed, regardless of whether scores
-    # have been recorded yet.  This ensures users see each other's
-    # picks as soon as the match starts.
     show_flags = {}
     now_utc = datetime.now(timezone.utc)
     for f in fixtures:
         kickoff = f.match_date
         if kickoff.tzinfo is None:
             kickoff = kickoff.replace(tzinfo=timezone.utc)
-        # Reveal predictions if kickoff time has passed
         show_flags[f.id] = now_utc >= kickoff
 
     return users, matrix, show_flags
 
+
 def evaluate_predictions() -> None:
-    """
-    Assign points to predictions for fixtures with final scores.
-
-    A prediction earns 1 point if the user's selection matches the final
-    outcome (home win, draw or away win), and 0 otherwise.  We award
-    points once per fixture and do not reevaluate predictions that have
-    already been scored.  Previously this function only considered
-    fixtures whose status field was exactly ``"FINISHED"``.  However,
-    some APIs do not update the status field promptly or at all when
-    final scores are available.  As a result predictions could remain
-    unscored, leading to incorrect leaderboard totals.
-
-    To avoid this, we now consider any fixture where both the home
-    score and away score are present (non-None) to be complete.  This
-    ensures that if final scores are recorded—even if the status is
-    still ``SCHEDULED``, ``TIMED`` or ``IN_PLAY``—predictions will be
-    evaluated exactly once.
-    """
-    # Select fixtures that have recorded scores for both teams.  We do not
-    # rely on the ``status`` field here because some APIs fail to update
-    # it consistently.  Using ``isnot(None)`` ensures we only target
-    # fixtures with final scores.
+    """Assign points to predictions for fixtures with final scores."""
     finished_fixtures = (
         Fixture.query
         .filter(Fixture.home_score.isnot(None), Fixture.away_score.isnot(None))
@@ -664,25 +663,20 @@ def evaluate_predictions() -> None:
     )
     for fixture in finished_fixtures:
         outcome = fixture.outcome_code()
-        # Skip fixtures without a determinable outcome (should not happen
-        # because we filter by both scores being present).  If either score
-        # were None the outcome_code would return None and no points would
-        # be awarded.
         if outcome is None:
             continue
         for prediction in fixture.predictions:
-            # Award points only once.  If ``points_awarded`` is already
-            # set, leave it unchanged.  This prevents re-evaluating
-            # predictions and ensures idempotence across multiple calls.
             if prediction.points_awarded is None:
                 prediction.points_awarded = 1 if prediction.selection == outcome else 0
                 db.session.add(prediction)
     db.session.commit()
 
+
 # Season/matchday helpers
 def seasons_available() -> list[str]:
     rows = db.session.query(Fixture.season).distinct().all()
     return sorted([r[0] for r in rows])
+
 
 def matchdays_for(season: str) -> list[str]:
     rows = (
@@ -697,10 +691,9 @@ def matchdays_for(season: str) -> list[str]:
     except Exception:
         return sorted(set(days))
 
+
 def latest_completed_matchday(season: str) -> str | None:
-    """
-    Find the latest matchday where all fixtures have recorded scores.
-    """
+    """Find the latest matchday where all non-postponed fixtures have scores."""
     if not season:
         return None
     
@@ -713,18 +706,17 @@ def latest_completed_matchday(season: str) -> str | None:
     except Exception:
         sorted_days = sorted(set(days), key=lambda s: (len(s), s), reverse=True)
     
-    # Check each matchday from latest to earliest
     for md in sorted_days:
-        # Get all fixtures for this matchday
+        # Get non-postponed fixtures for this matchday
         fixtures = Fixture.query.filter(
             Fixture.season == season,
-            Fixture.matchday == md
+            Fixture.matchday == md,
+            ~Fixture.status.in_(EXCLUDED_FROM_CURRENT)
         ).all()
         
         if not fixtures:
             continue
             
-        # Check if all fixtures have both scores recorded
         all_complete = all(
             (f.home_score is not None and f.away_score is not None)
             for f in fixtures
@@ -735,15 +727,13 @@ def latest_completed_matchday(season: str) -> str | None:
     
     return None
 
+
 def current_home_matchday(season: str) -> str | None:
     """
-    Determine which matchday to present on the home page.  The logic
-    prioritises the earliest matchday that has any fixture without
-    final results. Once all fixtures in a matchday have both scores
-    recorded, move to the next matchday.
-
-    Returns the matchday as a string, or None if the season has no
-    matchdays.
+    Determine which matchday to present on the home page.
+    
+    Prioritises the earliest matchday that has any non-postponed fixture
+    without final results.
     """
     if not season:
         return None
@@ -751,19 +741,20 @@ def current_home_matchday(season: str) -> str | None:
     days = matchdays_for(season)
     if not days:
         return None
+        
     try:
         sorted_days = [str(n) for n in sorted({int(d) for d in days})]
     except Exception:
         sorted_days = sorted(set(days), key=lambda s: (len(s), s))
 
-    # Iterate through matchdays and return the first one that has
-    # any fixture without final results (missing home_score or away_score)
     for md in sorted_days:
+        # Check for incomplete non-postponed fixtures
         incomplete = (
             db.session.query(Fixture.id)
             .filter(
                 Fixture.season == season,
                 Fixture.matchday == md,
+                ~Fixture.status.in_(EXCLUDED_FROM_CURRENT),
                 db.or_(
                     Fixture.home_score.is_(None),
                     Fixture.away_score.is_(None)
@@ -774,21 +765,11 @@ def current_home_matchday(season: str) -> str | None:
         if incomplete is not None:
             return md
 
-    # If all matchdays have complete results, return the latest one
     return latest_completed_matchday(season)
 
-def weekly_user_points(season: str, matchday: str):
-    """
-    Return a list of (user_id, username, points) for the given season and matchday.
 
-    Points are computed dynamically: for each prediction linked to a fixture
-    in the specified season and matchday, add 1 point if the selection
-    matches the final outcome of that fixture.  Predictions for fixtures
-    without final scores contribute 0 points.  Users with no predictions
-    for this round are omitted from the result.
-    """
-    # Fetch predictions joined with fixtures and users for the target
-    # matchday.  We do not rely on points_awarded here.
+def weekly_user_points(season: str, matchday: str):
+    """Return (user_id, username, points) for the given season and matchday."""
     predictions = (
         db.session.query(Prediction, Fixture, User)
         .join(Fixture, Fixture.id == Prediction.fixture_id)
@@ -796,28 +777,25 @@ def weekly_user_points(season: str, matchday: str):
         .filter(Fixture.season == season, Fixture.matchday == str(matchday))
         .all()
     )
-    # Accumulate points per user
     user_points: dict[int, int] = {}
     user_names: dict[int, str] = {}
     for pred, fix, user in predictions:
         user_names[user.id] = user.username
         if fix.home_score is None or fix.away_score is None:
-            # fixture not completed; no points
             continue
         outcome = fix.outcome_code()
         if outcome and pred.selection == outcome:
             user_points[user.id] = user_points.get(user.id, 0) + 1
         else:
-            # incorrect predictions contribute 0; ensure user appears with 0 if not present
             user_points.setdefault(user.id, user_points.get(user.id, 0))
-    # Build rows list: (id, username, points)
     rows = [(uid, user_names.get(uid, ""), pts) for uid, pts in user_points.items()]
-    # Sort by points desc then username
     return sorted(rows, key=lambda r: (-r[2], r[1].lower()))
+
 
 def current_season_from_db() -> str | None:
     row = db.session.query(Fixture.season).order_by(Fixture.season.desc()).first()
     return row[0] if row else None
+
 
 def all_matchdays_for_season(season: str) -> list[str]:
     rows = db.session.query(distinct(Fixture.matchday)).filter(Fixture.season == season).all()
@@ -826,6 +804,7 @@ def all_matchdays_for_season(season: str) -> list[str]:
         return [str(n) for n in sorted({int(x) for x in mds})]
     except Exception:
         return sorted(set(mds), key=lambda s: (len(s), s))
+
 
 def classify_matchdays(season: str):
     now_utc = datetime.now(timezone.utc)
@@ -857,16 +836,9 @@ def classify_matchdays(season: str):
     other = _order([m for m,s in md_status.items() if s=="other"])
     return finished, live, upcoming, other
 
-def season_user_points(season: str):
-    """
-    Return a list of dicts {username: points} for the specified season.
 
-    Points are computed dynamically: each correct prediction yields 1 point.
-    Predictions on fixtures without final scores yield 0 points.  Users
-    who have not made any predictions for the season will not appear in
-    the output.  The result is sorted descending by points and then
-    alphabetically by username.
-    """
+def season_user_points(season: str):
+    """Return list of dicts {username: points} for the specified season."""
     predictions = (
         db.session.query(Prediction, Fixture, User)
         .join(Fixture, Fixture.id == Prediction.fixture_id)
@@ -886,6 +858,7 @@ def season_user_points(season: str):
     rows = [{"username": uname, "points": pts} for uname, pts in user_points.items()]
     return sorted(rows, key=lambda x: (-x["points"], x["username"].lower()))
 
+
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
@@ -895,7 +868,6 @@ def season_user_points(season: str):
 def index():
     update_fixtures_adaptive()
 
-    # Decide which season & matchday to show
     season = current_season_from_db()
     if not season:
         flash("No season data available yet.", "warning")
@@ -908,6 +880,7 @@ def index():
             show_preds_flags={},
             season=None,
             matchday=None,
+            postponed_count=0,
         )
 
     md = current_home_matchday(season)
@@ -922,18 +895,28 @@ def index():
             show_preds_flags={},
             season=season,
             matchday=None,
+            postponed_count=0,
         )
 
-    # Pull fixtures for THIS matchday only
+    # Get non-postponed fixtures for the current matchday
     fixtures = (
         Fixture.query
-        .filter(Fixture.season == season, Fixture.matchday == str(md))
+        .filter(
+            Fixture.season == season,
+            Fixture.matchday == str(md),
+            ~Fixture.status.in_(EXCLUDED_FROM_CURRENT)
+        )
         .order_by(Fixture.match_date.asc())
         .all()
     )
 
-    user_predictions = {p.fixture_id: p for p in current_user.predictions}
+    # Count postponed fixtures for the badge
+    postponed_count = Fixture.query.filter(
+        Fixture.season == season,
+        Fixture.status.in_(EXCLUDED_FROM_CURRENT)
+    ).count()
 
+    user_predictions = {p.fixture_id: p for p in current_user.predictions}
     users_cols, pred_matrix, show_flags = prediction_matrix(fixtures)
 
     return render_template(
@@ -944,8 +927,27 @@ def index():
         pred_matrix=pred_matrix,
         show_preds_flags=show_flags,
         season=season,
-        matchday=md,  # <-- tell the template which matchday we're on
+        matchday=md,
+        postponed_count=postponed_count,
     )
+
+
+@app.route('/postponed')
+@login_required
+def postponed_fixtures_view():
+    """View all postponed/cancelled/suspended fixtures."""
+    season = request.args.get('season') or current_season_from_db()
+    seasons = seasons_available()
+    
+    postponed = get_postponed_fixtures(season)
+    
+    return render_template(
+        'postponed.html',
+        fixtures=postponed,
+        season=season,
+        seasons=seasons,
+    )
+
 
 @app.route("/predict/<int:fixture_id>", methods=["POST"])
 @login_required
@@ -974,10 +976,10 @@ def predict(fixture_id: int):
     db.session.commit()
     return redirect(url_for("index"))
 
+
 @app.route("/save_all_predictions", methods=["POST"])
 @login_required
 def save_all_predictions():
-    # Save only for fixtures still open
     all_fixtures = Fixture.query.all()
     for fixture in all_fixtures:
         if not fixture.is_open_for_prediction():
@@ -995,14 +997,10 @@ def save_all_predictions():
     flash("All predictions saved!", "success")
     return redirect(url_for("index"))
 
+
 @app.route("/leaderboard")
 @login_required
 def leaderboard():
-    # Update fixture data (poll API if necessary) and award points for any
-    # fixtures with recorded scores.  ``update_fixtures_adaptive`` may skip
-    # fetching if called too frequently, so we explicitly call
-    # ``evaluate_predictions`` here to ensure finished games are scored
-    # whenever the leaderboard is viewed.
     update_fixtures_adaptive()
     evaluate_predictions()
 
@@ -1012,9 +1010,6 @@ def leaderboard():
     raw_scope = request.args.get("scope")
     scope = (raw_scope or "season").lower()
     season = request.args.get("season")
-    # Matchday: treat as a string so that the selected option remains highlighted
-    # in the template.  Converting to int can cause mismatches when comparing
-    # against the list of matchday strings (e.g. '2' vs 2).  See issue #X.
     matchday = request.args.get("matchday")
 
     if raw_scope is None and current_season:
@@ -1064,32 +1059,18 @@ def leaderboard():
         matchday=matchday
     )
 
+
 @app.route("/history")
 @login_required
 def history():
-    """
-    Display historical fixtures and predictions for a given season and matchday.
-    This view allows users to browse finished matchdays.  Predictions are
-    revealed once kickoff time has passed.  If no matchday is specified,
-    the latest completed matchday for the chosen season (or current season)
-    is used.
-    """
     update_fixtures_adaptive()
 
-    # Available seasons and the current one.  Fall back to the last season
-    # in the list if none is marked current.
     seasons = seasons_available()
     current_season = current_season_from_db() or (seasons[-1] if seasons else None)
 
-    # Season and matchday come from query parameters.  If missing, use
-    # sensible defaults.  ``request.args.get`` returns ``None`` when not
-    # present; convert matchday to string to avoid type issues.
     season = request.args.get("season") or current_season
     matchday = request.args.get("matchday") or None
 
-    # Determine the matchday to display.  If unspecified, choose the
-    # latest completed matchday; if none are completed yet, default to
-    # the first available matchday for the season (if any).
     if season:
         if not matchday:
             matchday = latest_completed_matchday(season)
@@ -1099,8 +1080,6 @@ def history():
     else:
         matchday = None
 
-    # Fetch fixtures for the requested season/matchday.  An empty list
-    # yields an empty table rather than an error.
     fixtures = []
     if season and matchday:
         fixtures = (
@@ -1110,9 +1089,6 @@ def history():
             .all()
         )
 
-    # Build the prediction matrix.  ``prediction_matrix`` returns a list of
-    # users, a prediction mapping and a set of flags indicating when
-    # predictions should be revealed (at kickoff time).
     users_cols, pred_matrix, show_flags = prediction_matrix(fixtures)
 
     return render_template(
@@ -1126,6 +1102,7 @@ def history():
         matchdays=matchdays_for(season) if season else [],
         matchday=matchday
     )
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -1141,11 +1118,13 @@ def login():
         flash("Invalid username or password", "danger")
     return render_template("login.html")
 
+
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
     return redirect(url_for("login"))
+
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -1190,6 +1169,7 @@ def register():
             return render_template("register.html")
     return render_template("register.html")
 
+
 @app.route("/admin", methods=["GET", "POST"])
 @login_required
 def admin():
@@ -1206,21 +1186,17 @@ def admin():
                 db.session.commit()
                 flash("Invite created.", "success")
     invites = Invite.query.all()
-    # Include all users for password reset form.  Do not include admin-only fields.
     users = User.query.order_by(User.username.asc()).all()
-    return render_template("admin.html", invites=invites, users=users)
+    
+    # Get postponed fixtures count for admin dashboard
+    postponed_count = Fixture.query.filter(Fixture.status.in_(EXCLUDED_FROM_CURRENT)).count()
+    
+    return render_template("admin.html", invites=invites, users=users, postponed_count=postponed_count)
+
 
 @app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
 @login_required
 def admin_reset_password(user_id: int):
-    """
-    Allow an admin to reset a user's password.
-
-    This route accepts a POST with a `new_password` parameter and updates the
-    user's password using set_password().  It is protected by login and admin
-    checks.  Upon completion, it redirects back to the admin page with a flash
-    message.
-    """
     if not current_user.is_admin:
         abort(403)
     new_password = request.form.get("new_password") or ""
@@ -1230,31 +1206,16 @@ def admin_reset_password(user_id: int):
     elif not new_password:
         flash("New password must not be empty.", "danger")
     else:
-        # Set the new password securely
         user.set_password(new_password)
         db.session.add(user)
         db.session.commit()
         flash(f"Password reset for {user.username}.", "success")
     return redirect(url_for("admin"))
 
-# -----------------------------------------------------------------------------
-# Admin: delete a user
-#
-# Allows an administrator to permanently remove a user account.  The request
-# must be a POST to avoid accidental deletions via GET.  We prohibit
-# self‑deletion and deleting other admin users for safety.  All associated
-# predictions are cascaded via the relationship defined on the User model.
+
 @app.route("/admin/delete_user/<int:user_id>", methods=["POST"])
 @login_required
 def admin_delete_user(user_id: int):
-    """
-    Remove a user and their predictions from the database.
-
-    This route can only be accessed by an admin.  It checks that the target
-    user exists and is not the current admin.  It also prevents deletion of
-    other admin accounts.  Upon success it flashes a message and redirects
-    back to the admin panel.
-    """
     if not current_user.is_admin:
         abort(403)
     user = User.query.get(user_id)
@@ -1266,15 +1227,12 @@ def admin_delete_user(user_id: int):
         flash("Cannot delete another admin user.", "danger")
     else:
         username = user.username
-        # Unlink invites referencing this user so the foreign key constraint
-        # does not block deletion.  We set used_by_user_id to None for any
-        # invite used by this user.
         Invite.query.filter_by(used_by_user_id=user.id).update({Invite.used_by_user_id: None})
-        # Now delete the user; cascades on predictions will remove those rows.
         db.session.delete(user)
         db.session.commit()
         flash(f"User {username} deleted.", "success")
     return redirect(url_for("admin"))
+
 
 @app.route("/admin/refresh", methods=["POST"])
 @login_required
@@ -1285,22 +1243,13 @@ def admin_refresh():
     flash("Fixtures refreshed.", "success")
     return redirect(url_for("index"))
 
-# -----------------------------------------------------------------------------
-# Admin: results management
-#
-# Provide a page to review and edit fixture results for a given season and
-# matchday.  Only admins can access this page.  The page lists all
-# fixtures in the selected round with a form per fixture to update the
-# home and away scores.  Editing the result sets the fixture's status to
-# 'FINISHED' when both scores are provided.
+
 @app.route("/admin/results", methods=["GET"])
 @login_required
 def admin_results():
     if not current_user.is_admin:
         abort(403)
-    # Determine the season and matchday to display
     seasons = seasons_available()
-    # If there are no fixtures at all, just render an empty page
     if not seasons:
         return render_template("admin_results.html", fixtures=[], seasons=[], season=None, matchday=None, matchdays=[])
     season = request.args.get("season") or seasons[-1]
@@ -1321,10 +1270,10 @@ def admin_results():
         season=season,
         matchday=matchday,
         matchdays=matchdays,
+        EXCLUDED_FROM_CURRENT=EXCLUDED_FROM_CURRENT,
     )
 
-# Route to update a fixture's result manually.  Accepts POST with
-# 'home_score' and 'away_score' fields.  Only admin can perform this action.
+
 @app.route("/admin/update_result/<int:fixture_id>", methods=["POST"])
 @login_required
 def admin_update_result(fixture_id: int):
@@ -1335,7 +1284,6 @@ def admin_update_result(fixture_id: int):
         flash("Fixture not found.", "danger")
         return redirect(url_for("admin_results"))
     
-    # Parse incoming scores; allow empty strings to clear the score
     def parse_score(s):
         try:
             return int(s) if s is not None and s != "" else None
@@ -1345,55 +1293,124 @@ def admin_update_result(fixture_id: int):
     home_score = parse_score(request.form.get("home_score"))
     away_score = parse_score(request.form.get("away_score"))
     
-    # Track if scores were edited
-    scores_changed = False
     if home_score != fixture.home_score or away_score != fixture.away_score:
-        scores_changed = True
         fixture.home_score = home_score
         fixture.away_score = away_score
-        # Mark that scores were manually edited (prevents API overwrites)
         fixture.scores_manually_edited = True
-        # Update status based on scores
         if home_score is not None and away_score is not None:
             fixture.status = 'FINISHED'
-        else:
+            fixture.status_manually_edited = True
+        elif fixture.status == 'FINISHED':
             fixture.status = 'TIMED'
     
-    # Optionally update match_date if provided
+    # Handle status change
+    new_status = request.form.get("status")
+    if new_status and new_status in FIXTURE_STATUSES:
+        if new_status != fixture.status:
+            fixture.status = new_status
+            fixture.status_manually_edited = True
+    
+    # Handle rescheduled date (for postponed fixtures)
+    rescheduled_str = request.form.get("rescheduled_date")
+    if rescheduled_str:
+        try:
+            dt = datetime.fromisoformat(rescheduled_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            fixture.rescheduled_date = dt
+        except Exception:
+            pass
+    elif request.form.get("clear_rescheduled"):
+        fixture.rescheduled_date = None
+    
+    # Handle admin notes
+    admin_notes = request.form.get("admin_notes")
+    if admin_notes is not None:
+        fixture.admin_notes = admin_notes.strip() if admin_notes.strip() else None
+    
+    # Handle match_date update
     match_date_str = request.form.get("match_date")
     if match_date_str:
         try:
-            # Expect an ISO datetime without timezone (YYYY-MM-DDTHH:MM)
             dt = datetime.fromisoformat(match_date_str)
-            # If the parsed datetime is naive (no tzinfo), assume UTC
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            # Update match_date if the value has changed
             if fixture.match_date != dt:
                 fixture.match_date = dt
-                # Date/time changes do NOT set scores_manually_edited
-                # This allows API to update scores even after date edits
         except Exception:
-            # Ignore invalid input; leave match_date unchanged
             pass
 
     db.session.add(fixture)
     db.session.commit()
-    
-    # Re-evaluate predictions in case the outcome changed
     evaluate_predictions()
     
-    flash(f"Result and kickoff updated for {fixture.home_team} vs {fixture.away_team}.", "success")
+    flash(f"Updated: {fixture.home_team} vs {fixture.away_team}.", "success")
     return redirect(url_for("admin_results", season=fixture.season, matchday=fixture.matchday))
 
-# -----------------------------------------------------------------------------
-# History refresh route
-#
-# Allows any logged-in user to manually trigger an update of fixture data
-# (dates, times, scores) and then redirect back to the history page.  We
-# include the current season and matchday in hidden form inputs so the user
-# returns to the same view after refreshing.  This route simply calls
-# update_fixtures_adaptive(force=True) and flashes a message.
+
+@app.route("/admin/postpone/<int:fixture_id>", methods=["POST"])
+@login_required
+def admin_postpone_fixture(fixture_id: int):
+    """Quick action to mark a fixture as postponed."""
+    if not current_user.is_admin:
+        abort(403)
+    fixture = Fixture.query.get(fixture_id)
+    if not fixture:
+        flash("Fixture not found.", "danger")
+        return redirect(url_for("admin_results"))
+    
+    fixture.status = "POSTPONED"
+    fixture.status_manually_edited = True
+    
+    # Optional: set rescheduled date if provided
+    rescheduled_str = request.form.get("rescheduled_date")
+    if rescheduled_str:
+        try:
+            dt = datetime.fromisoformat(rescheduled_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            fixture.rescheduled_date = dt
+        except Exception:
+            pass
+    
+    # Optional: add notes
+    notes = request.form.get("notes")
+    if notes:
+        fixture.admin_notes = notes.strip()
+    
+    db.session.add(fixture)
+    db.session.commit()
+    
+    flash(f"Marked as POSTPONED: {fixture.home_team} vs {fixture.away_team}.", "warning")
+    return redirect(url_for("admin_results", season=fixture.season, matchday=fixture.matchday))
+
+
+@app.route("/admin/unpostpone/<int:fixture_id>", methods=["POST"])
+@login_required
+def admin_unpostpone_fixture(fixture_id: int):
+    """Restore a postponed fixture to scheduled status."""
+    if not current_user.is_admin:
+        abort(403)
+    fixture = Fixture.query.get(fixture_id)
+    if not fixture:
+        flash("Fixture not found.", "danger")
+        return redirect(url_for("admin_results"))
+    
+    # If there's a rescheduled date, use it as the new match_date
+    if fixture.rescheduled_date:
+        fixture.match_date = fixture.rescheduled_date
+        fixture.rescheduled_date = None
+    
+    fixture.status = "SCHEDULED"
+    fixture.status_manually_edited = False  # Allow API to update again
+    fixture.admin_notes = None
+    
+    db.session.add(fixture)
+    db.session.commit()
+    
+    flash(f"Restored to SCHEDULED: {fixture.home_team} vs {fixture.away_team}.", "success")
+    return redirect(url_for("admin_results", season=fixture.season, matchday=fixture.matchday))
+
 
 @app.route("/history/refresh", methods=["POST"])
 @login_required
@@ -1402,31 +1419,11 @@ def history_refresh():
     matchday = request.form.get("matchday")
     update_fixtures_adaptive(force=True)
     flash("Fixtures refreshed.", "success")
-    # Redirect back to the history page with the same parameters
     return redirect(url_for("history", season=season, matchday=matchday))
 
-# ----------------------------------------------------------------------------
-# Prediction coverage view for admins
-#
-# This helper returns, for each fixture in a given season & matchday, the
-# number of players who have submitted a prediction and a list of users who
-# have not yet picked.  It relies solely on the existence of (user_id,
-# fixture_id) rows in the predictions table and never inspects any
-# Prediction.selection values.  The caller is responsible for enforcing
-# authorization (admin-only).
+
 def prediction_coverage(season: str, matchday: str):
-    """Return coverage statistics for each fixture in a round.
-
-    Each element of the returned list is a dict with keys:
-      - fixture: the Fixture instance
-      - submitted_count: how many players submitted a pick
-      - total_players: total number of eligible players
-      - missing_users: list of User instances who have not yet submitted
-
-    Players are defined as non-admin users; optionally you can filter
-    out inactive users if your User model has an `is_active` flag.
-    """
-    # Fetch fixtures for this round
+    """Return coverage statistics for each fixture in a round."""
     fixtures = (Fixture.query
                 .filter_by(season=season, matchday=matchday)
                 .order_by(Fixture.match_date.asc())
@@ -1434,8 +1431,6 @@ def prediction_coverage(season: str, matchday: str):
     if not fixtures:
         return []
 
-    # Determine the pool of players (non-admin users).  Remove the
-    # `is_active` filter if your schema does not support it.
     players = (User.query
                .filter(User.is_admin == False)
                .order_by(User.username.asc())
@@ -1445,8 +1440,6 @@ def prediction_coverage(season: str, matchday: str):
 
     fixture_ids = [f.id for f in fixtures]
 
-    # Fetch pairs of (user_id, fixture_id) for existing predictions.
-    # We do not load the prediction selection itself.
     pairs = (db.session.query(Prediction.user_id, Prediction.fixture_id)
              .filter(Prediction.fixture_id.in_(fixture_ids),
                      Prediction.user_id.in_(player_ids))
@@ -1473,25 +1466,11 @@ def prediction_coverage(season: str, matchday: str):
 @app.route("/admin/coverage", methods=["GET"])
 @login_required
 def admin_coverage():
-    """Admin endpoint: show prediction coverage for a season & matchday.
-
-    Requires the current user to be an admin.  Accepts optional query
-    parameters:
-      - season: the season to view (defaults to the current or latest)
-      - matchday: the matchday to view (defaults to the current incomplete round)
-
-    Renders the admin_coverage.html template with coverage stats for each
-    fixture.
-    """
     if not current_user.is_admin:
         abort(403)
-    # Compute available seasons and pick the current one from the DB or
-    # fallback to the last in the list
     seasons = seasons_available()
     current_season = current_season_from_db() or (seasons[-1] if seasons else None)
-    # Determine requested season; if absent use current season
     season = request.args.get("season") or current_season
-    # Determine matchday; if absent choose the current incomplete round or last
     md_param = request.args.get("matchday")
     if md_param:
         md = md_param
@@ -1513,6 +1492,7 @@ def admin_coverage():
         rows=rows,
     )
 
+
 # -----------------------------------------------------------------------------
 # CLI helpers
 # -----------------------------------------------------------------------------
@@ -1530,6 +1510,28 @@ def init_db_command() -> None:
         print('Admin user created with username "admin" and password "admin".')
     else:
         print("Admin user already exists.")
+
+
+@app.cli.command("add-postponed-columns")
+def add_postponed_columns() -> None:
+    """Migration: Add new columns for postponed fixture support."""
+    from sqlalchemy import inspect, text
+    inspector = inspect(db.engine)
+    columns = [c['name'] for c in inspector.get_columns('fixtures')]
+    
+    with db.engine.connect() as conn:
+        if 'status_manually_edited' not in columns:
+            conn.execute(text('ALTER TABLE fixtures ADD COLUMN status_manually_edited BOOLEAN DEFAULT FALSE'))
+            print("Added status_manually_edited column")
+        if 'rescheduled_date' not in columns:
+            conn.execute(text('ALTER TABLE fixtures ADD COLUMN rescheduled_date DATETIME'))
+            print("Added rescheduled_date column")
+        if 'admin_notes' not in columns:
+            conn.execute(text('ALTER TABLE fixtures ADD COLUMN admin_notes VARCHAR'))
+            print("Added admin_notes column")
+        conn.commit()
+    print("Migration complete.")
+
 
 # Ensure DB tables exist on startup
 with app.app_context():
@@ -1558,6 +1560,7 @@ with app.app_context():
             db.session.commit()
             print(f"[BOOTSTRAP] Invite code ensured: {invite_code}")
 
+
 @app.cli.command("fix-times-utc")
 def fix_times_utc():
     from sqlalchemy import select
@@ -1580,6 +1583,7 @@ def fix_times_utc():
                 changed += 1
     db.session.commit()
     print(f"Normalized {changed} fixture times to UTC.")
+
 
 if __name__ == "__main__":
     with app.app_context():
