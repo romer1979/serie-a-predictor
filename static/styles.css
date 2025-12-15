@@ -6,13 +6,6 @@
 /*
  * --------------------------------------------------------------------------
  * Global dark theme and basic typographic defaults.
- *
- * The original template relied on Bootstrap being available via the parent
- * layout, but this standalone version is served directly and therefore
- * defines its own base colours.  We choose a dark background with light
- * foreground text to reflect the look of popular sports dashboards.  These
- * styles apply to the entire document; if you already load Bootstrap or
- * another framework they will coexist without conflict.
  */
 body {
   background-color: #0d1117;
@@ -28,18 +21,16 @@ body {
 a { color: #58a6ff; text-decoration: none; }
 a:hover, a:focus { color: #79c0ff; text-decoration: underline; }
 
-/* Muted helper (matches Bootstrap's ``text-muted`` semantics). */
+/* Muted helper */
 .muted {
   color: #8b949e;
   opacity: 0.8;
 }
 
-/* Semi‑bold helper; Bootstrap defines ``fw-semibold`` but when the
-   library is not present we fall back to this. */
+/* Semi-bold helper */
 .fw-semibold { font-weight: 600; }
 
-/* Hide the sticky container by default.  On small screens it will be
-   displayed and positioned fixed via the media query below. */
+/* Hide the sticky container by default */
 .sticky-save {
   display: none;
 }
@@ -55,7 +46,7 @@ a:hover, a:focus { color: #79c0ff; text-decoration: underline; }
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: auto;      /* let Kickoff fit its content */
+  table-layout: auto;
 }
 .th, .td {
   padding: .75rem .9rem;
@@ -70,13 +61,7 @@ a:hover, a:focus { color: #79c0ff; text-decoration: underline; }
   background: rgba(255,255,255,0.02);
 }
 
-/*
- * Override Bootstrap's light table styles when rendering inside a dark
- * ``.table-card``.  Without these rules the table header and striped rows
- * inherit a white background from Bootstrap, which looks jarring on a
- * dark page.  We scope the overrides to descendants of ``.table-card`` so
- * that regular Bootstrap tables elsewhere in the project remain untouched.
- */
+/* Override Bootstrap's light table styles */
 .table-card .table thead th {
   background-color: rgba(255,255,255,0.04) !important;
   color: inherit;
@@ -92,13 +77,7 @@ a:hover, a:focus { color: #79c0ff; text-decoration: underline; }
   background-color: transparent;
 }
 
-/*
- * Bootstrap defines a set of CSS variables to control table colours.  For a
- * dark table we override them inside our ``.table-card`` so that the
- * table body and alternating rows are transparent and lightly tinted
- * instead of white.  This avoids the need for multiple !important rules
- * throughout the stylesheet.
- */
+/* Bootstrap CSS variable overrides for dark tables */
 .table-card .table {
   --bs-table-bg: transparent;
   --bs-table-striped-bg: rgba(255,255,255,0.02);
@@ -109,14 +88,6 @@ a:hover, a:focus { color: #79c0ff; text-decoration: underline; }
   --bs-table-border-color: rgba(255,255,255,0.08);
 }
 
-/*
- * As a final guard against Bootstrap's light table styles we apply
- * explicit background and colour overrides to the table headings and
- * cells.  The ``!important`` flag is used sparingly here to ensure
- * these colours win over Bootstrap’s selectors, which are very
- * specific.  Without these rules the header and rows would still
- * inherit the default white backgrounds.
- */
 .table-card table.table > thead > tr > th,
 .table-card table.table > tbody > tr > td {
   background-color: transparent !important;
@@ -143,20 +114,19 @@ a:hover, a:focus { color: #79c0ff; text-decoration: underline; }
 .footnote { opacity: .7; margin-top: 1rem; font-size: .9rem; }
 .tiny { font-size: .85rem; }
 
-/* ====== Column sizing logic ======
-   Kickoff fits content; Match flexes; user cols are narrow; result/status compact */
-.col-kickoff { width: 1%; }   /* shrink-wrapping content */
+/* ====== Column sizing logic ====== */
+.col-kickoff { width: 1%; }
 .col-match   { width: auto; }
 .col-user    { width: 48px; }
 .col-result  { width: 1%; }
 .col-status  { width: 1%; }
 
-/* Kickoff cell: two lines stacked, center */
+/* Kickoff cell */
 td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
 .kickoff-date { font-weight: 600; font-size: .9rem; }
 .kickoff-time { font-size: .82rem; opacity: .9; }
 
-/* Match title narrower with ellipsis */
+/* Match title */
 .match-title {
   font-weight: 600;
   margin-bottom: 6px;
@@ -174,9 +144,8 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
 }
 .choice .radio { display: inline-flex; align-items: center; gap: 6px; }
 
-/* Colour the native radio inputs with the primary accent when supported */
+/* Radio input accent colour */
 .choice .radio input[type="radio"] {
-  /* Use the same colour as the primary button to tie the UI together */
   accent-color: #2563eb;
 }
 
@@ -185,12 +154,14 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
 .pill.live     { background: rgba(220,53,69,.15);  border: 1px solid rgba(220,53,69,.35); }
 .pill.finished { background: rgba(25,135,84,.15);  border: 1px solid rgba(25,135,84,.35); }
 .pill.scheduled{ background: rgba(108,117,125,.15);border: 1px solid rgba(108,117,125,.35); }
+/* Postponed status pill */
+.pill.postponed { background: rgba(255,193,7,.15); border: 1px solid rgba(255,193,7,.35); color: #ffc107; }
 
-/* Desktop-only helper; mobile counterpart below */
+/* Desktop-only helper */
 .desktop-only { display: table-cell; }
 
-/* ====== Mobile predictions strip (one line under the match) ====== */
-.mobile-picks-row { display: none; }     /* hidden on desktop */
+/* ====== Mobile predictions strip ====== */
+.mobile-picks-row { display: none; }
 .predictions-strip {
   display: flex;
   gap: .5rem;
@@ -203,10 +174,6 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   padding: .25rem .5rem;
   font-size: .875rem;
   background: var(--bs-gray-800, rgba(255,255,255,.06));
-  /* Ensure the prediction chips use a light colour rather than the
-     default table text colour.  Fallback to ``inherit`` to avoid
-     black text on dark backgrounds when the Bootstrap variable is
-     undefined. */
   color: #f8f9fa;
   border: 1px solid var(--bs-gray-700, rgba(255,255,255,.18));
 }
@@ -217,13 +184,7 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   border-color: rgba(25, 135, 84, .35);
 }
 
-/*
- * Override text colours for picks shown in the fixtures table.  Without
- * these declarations Bootstrap's default table colours can render
- * predictions in a dark colour that is hard to read on a dark
- * background.  By explicitly setting them to a light tone we ensure
- * readability across themes.
- */
+/* Override text colours for picks */
 .desk-pick,
 .mb-pick,
 .mb-name,
@@ -249,9 +210,6 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
 
 /* ====== Responsive ====== */
 @media (max-width: 768px) {
-  /* Hide the kickoff column entirely on mobile to maximise horizontal space.
-     Both the header and body cells are suppressed, and the corresponding
-     column (<col>) is removed from the layout. */
   .col-kickoff { display: none !important; }
   th.kickoff-col { display: none !important; }
   td.kickoff { display: none !important; }
@@ -259,24 +217,13 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   .kickoff-date { font-size: .85rem; }
   .kickoff-time { font-size: .78rem; }
 
-  /* Hide desktop user columns; show one mobile picks row */
   .desktop-only { display: none; }
   .mobile-picks-row { display: table-row; }
 
-  /* Keep result & status visible */
   .col-result, .col-status { width: 1%; }
 
-  /* Keep "your pick" radios horizontal under the match */
   .choice { gap: 12px; flex-wrap: nowrap; }
 
-  /*
-   * On mobile devices we hide the per‑user columns and show the
-   * horizontally scrollable strip instead.  We also present the
-   * secondary save button below the fixtures list rather than
-   * fixing it to the viewport bottom.  This ensures the button
-   * never overlaps content while still providing an easy way
-   * to submit your picks at the end of the page.
-   */
   .sticky-save {
     display: block;
     position: static;
@@ -291,14 +238,8 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
     box-shadow: 0 4px 12px rgba(0,0,0,.2);
   }
 
-  /* Make table horizontally scrollable if the combined width exceeds the
-     viewport.  ``-webkit-overflow-scrolling: touch`` enables smooth
-     momentum scrolling on iOS. */
   .table-card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
-  /* When viewing predictions via the mobile toggle, stack each pick
-     vertically to better fit narrow screens.  Without this the chips
-     are arranged horizontally and require horizontal scrolling. */
   .predictions-strip {
     flex-direction: column;
     align-items: flex-start;
@@ -306,9 +247,6 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
     overflow-x: visible;
   }
   .predictions-strip .mb-chip {
-    /* Each prediction chip occupies the full width to avoid
-       overflowing or squeezing the content.  Align items
-       horizontally so the name, separator and pick stay on one line. */
     display: flex;
     width: 100%;
     align-items: center;
@@ -323,9 +261,7 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   .tiny { font-size: .78rem; }
 }
 
-/* Coverage page adjustments: ensure .table-dark inside a card inherits our dark theme colours.
-   Without these rules the default Bootstrap `.table-dark` can render text in
-   a muted gray and cells with insufficient contrast on our custom card. */
+/* Coverage page adjustments */
 .table-card .table-dark th,
 .table-card .table-dark td {
   color: #f8f9fa;
@@ -338,15 +274,7 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
 }
 
 /* ==================================================
- * Prediction status pills for your pick
- *
- * Each fixtures table row includes a small pill next to the radio
- * buttons that indicates whether the user's prediction has been
- * saved, modified but not yet saved, or is missing entirely.  We
- * choose subtle background colours to fit the dark theme without
- * overwhelming the rest of the UI.  The border colours are slightly
- * more saturated to improve contrast.  See index.html for the
- * corresponding JavaScript that toggles these classes.
+ * Prediction status pills
  */
 .pred-badge {
   display: inline-block;
@@ -370,14 +298,7 @@ td.kickoff { white-space: nowrap; text-align: center; line-height: 1.15; }
   border-color: rgba(220,53,69,.35);
 }
 
-/*
- * Coverage table overrides (admin coverage page)
- *
- * To ensure the coverage table on the admin page remains legible against
- * the dark background, we force white text and adjust muted text and
- * prediction chips.  The table has an id="coverage-table", so these
- * selectors do not affect other tables in the application.
- */
+/* Coverage table overrides */
 #coverage-table th,
 #coverage-table td {
   color: #f8f9fa !important;
