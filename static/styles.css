@@ -520,8 +520,9 @@ td.kickoff {
 /* -----------------------------------------------------------------------------
    Mobile Picks Row
    ----------------------------------------------------------------------------- */
-.mobile-picks-row {
-  display: none;
+/* Mobile picks row - shown/hidden via d-none class toggle */
+.mobile-picks-row:not(.d-none) {
+  display: table-row;
 }
 
 .predictions-strip {
@@ -776,10 +777,7 @@ td.kickoff {
     display: none !important;
   }
 
-  /* Show mobile picks */
-  .mobile-picks-row {
-    display: table-row;
-  }
+  /* Mobile picks row visibility handled by d-none toggle */
 
   /* Adjust padding */
   .table thead th,
