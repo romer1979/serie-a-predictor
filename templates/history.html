@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>History · Serie A Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <!-- Application styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="bg-dark text-white">
+  <!-- Navigation bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navHistory" aria-controls="navHistory" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navHistory">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('index') }}">Fixtures</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" aria-current="page" href="{{ url_for('history') }}">History</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('postponed_fixtures_view') }}">Postponed</a>
+          </li>
+          {% if current_user.is_authenticated and current_user.is_admin %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('admin') }}">Admin</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('admin_coverage') }}">Coverage</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('admin_results') }}">Edit results</a>
+            </li>
+          {% endif %}
+          {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container my-4">
+    <!-- Header with season and matchday selection -->
+    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3 gap-3">
+      <h1 class="h4 m-0">History — Season {{ season }}{% if matchday %}, Matchday {{ matchday }}{% endif %}</h1>
+      <form method="post" action="{{ url_for('history_refresh') }}" class="mt-2 mt-md-0">
+        <input type="hidden" name="season" value="{{ season }}">
+        <input type="hidden" name="matchday" value="{{ matchday }}">
+        <button type="submit" class="btn btn-sm btn-secondary">Refresh</button>
+      </form>
+    </div>
+    
+    <!-- Filter controls -->
+    <form method="get" class="row g-3 align-items-end mb-4">
+      <div class="col-auto">
+        <label for="season" class="form-label">Season</label>
+        <select id="season" name="season" class="form-select" onchange="this.form.submit()">
+          {% for s in seasons %}
+          <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <label for="matchday" class="form-label">Matchday</label>
+        <select id="matchday" name="matchday" class="form-select" onchange="this.form.submit()">
+          {% for md in matchdays %}
+          <option value="{{ md }}" {% if md == matchday %}selected{% endif %}>{{ md }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </form>
+    
+    {% if fixtures|length == 0 %}
+      <div class="card table-card p-4 text-center">No fixtures available for the selected matchday.</div>
+    {% else %}
+    <!-- History fixtures table -->
+    <div class="table-card">
+      <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+          <colgroup>
+            <col class="col-kickoff">
+            <col class="col-match">
+            {% for uid, uname in users_cols %}
+              <col class="col-user desktop-only">
+            {% endfor %}
+            <col class="col-result">
+            <col class="col-status">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="th kickoff-col text-center">Kickoff</th>
+              <th class="th">Match</th>
+              {% for uid, uname in users_cols %}
+                <th class="th desktop-only text-center" title="{{ uname }}">{{ uname }}</th>
+              {% endfor %}
+              <th class="th text-end">Result</th>
+              <th class="th text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for f in fixtures %}
+              {% set reveal = show_preds_flags.get(f.id) %}
+              {% set fkey = f.match_id or f.id %}
+              {% if f.home_score is not none and f.away_score is not none %}
+                {% set outcome = '1' if f.home_score > f.away_score else ('2' if f.away_score > f.home_score else 'X') %}
+              {% else %}
+                {% set outcome = None %}
+              {% endif %}
+              
+              <tr class="{% if f.status in ('POSTPONED', 'CANCELLED', 'SUSPENDED') %}opacity-50{% endif %}">
+                <td class="td kickoff text-center">
+                  <div class="kickoff-date" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}"></div>
+                  <div class="kickoff-time"></div>
+                </td>
+                <td class="td">
+                  <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+                  {% if f.admin_notes %}
+                    <div class="tiny text-warning">📝 {{ f.admin_notes }}</div>
+                  {% endif %}
+                </td>
+                {% for uid, uname in users_cols %}
+                  {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
+                  <td class="td desktop-only text-center">
+                    {% if reveal %}
+                      <span class="desk-pick {{ 'pick-correct' if outcome and pick == outcome else '' }}">{{ pick or '—' }}</span>
+                    {% else %}
+                      <span class="muted tiny">—</span>
+                    {% endif %}
+                  </td>
+                {% endfor %}
+                <td class="td text-end">
+                  {% if f.home_score is not none and f.away_score is not none %}
+                    <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+                <td class="td text-center">
+                  {% set s = f.display_status() %}
+                  <span class="pill
+                              {% if s == 'LIVE' %} live
+                              {% elif s == 'FT' %} finished
+                              {% elif s == 'PP' %} postponed
+                              {% elif s == 'CANC' %} postponed
+                              {% elif s == 'SUSP' %} postponed
+                              {% else %} scheduled
+                              {% endif %}">{{ s }}</span>
+                </td>
+              </tr>
+              <!-- Mobile row -->
+              <tr class="mobile-picks-row">
+                <td class="td" colspan="{{ 2 + users_cols|length + 2 }}">
+                  {% if reveal %}
+                    <div class="predictions-strip">
+                  {% for uid, uname in users_cols %}
+                        {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
+                        <span class="mb-chip {{ 'pick-correct' if outcome and pick == outcome else '' }}">
+                          <span class="mb-name">{{ uname }}</span>
+                          <span class="mb-sep">:</span>
+                          <span class="mb-pick">{{ pick or '—' }}</span>
+                        </span>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <div class="tiny muted">Predictions hidden.</div>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+  function fmtDate (iso) {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+  function fmtTime (iso) {
+    const d = new Date(iso);
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.kickoff-date').forEach(el => {
+      const iso = el.getAttribute('data-utc');
+      if (!iso) return;
+      el.textContent = fmtDate(iso);
+      const timeEl = el.parentElement.querySelector('.kickoff-time');
+      if (timeEl) timeEl.textContent = fmtTime(iso);
+    });
+  });
+  </script>
+</body>
+</html>

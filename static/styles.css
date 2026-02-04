@@ -1,0 +1,1243 @@
+/* =============================================================================
+   SERIE A PREDICTOR - Sports Bold Theme
+   Italian Green & Red color scheme with bold typography
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   CSS Custom Properties (Design Tokens)
+   ----------------------------------------------------------------------------- */
+:root {
+  /* Primary Colors - Serie A / Italian Flag */
+  --color-primary: #008C45;
+  --color-primary-dark: #006B35;
+  --color-primary-light: #00A651;
+  --color-accent: #CD212A;
+  --color-accent-dark: #A51C23;
+
+  /* Background & Surface */
+  --color-bg: #0a0e14;
+  --color-surface: #111820;
+  --color-surface-elevated: #1a2332;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.15);
+
+  /* Text */
+  --color-text: #ffffff;
+  --color-text-secondary: #9ca3af;
+  --color-text-muted: #6b7280;
+
+  /* Status Colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-live: #ef4444;
+  --color-info: #3b82f6;
+
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+
+  /* Typography */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 2rem;
+}
+
+/* -----------------------------------------------------------------------------
+   Base Styles
+   ----------------------------------------------------------------------------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* Links */
+a {
+  color: var(--color-primary-light);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+a:hover {
+  color: var(--color-primary);
+}
+
+/* -----------------------------------------------------------------------------
+   Navigation
+   ----------------------------------------------------------------------------- */
+.navbar {
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-bg) 100%);
+  border-bottom: 2px solid var(--color-primary);
+  padding: var(--space-sm) 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.navbar .container-fluid {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 var(--space-md);
+}
+
+.navbar-brand {
+  font-size: var(--font-size-xl);
+  font-weight: 800;
+  color: var(--color-text) !important;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  letter-spacing: -0.5px;
+}
+
+.navbar-brand::before {
+  content: 'SA';
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  color: white;
+  font-weight: 900;
+  font-size: var(--font-size-sm);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.navbar-dark .navbar-nav .nav-link {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link:focus {
+  color: var(--color-text);
+  background: var(--color-surface-elevated);
+}
+
+.navbar-dark .navbar-nav .nav-link.active {
+  color: var(--color-primary-light);
+  background: rgba(0, 140, 69, 0.15);
+}
+
+.navbar-toggler {
+  border: 1px solid var(--color-border-strong);
+  padding: var(--space-sm);
+}
+
+.navbar-toggler-icon {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.8%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+/* -----------------------------------------------------------------------------
+   Containers & Layout
+   ----------------------------------------------------------------------------- */
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--space-lg);
+}
+
+.my-4 {
+  margin-top: var(--space-xl) !important;
+  margin-bottom: var(--space-xl) !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Typography
+   ----------------------------------------------------------------------------- */
+h1, .h1 { font-size: var(--font-size-3xl); font-weight: 800; letter-spacing: -1px; }
+h2, .h2 { font-size: var(--font-size-2xl); font-weight: 700; letter-spacing: -0.5px; }
+h3, .h3 { font-size: var(--font-size-xl); font-weight: 700; }
+h4, .h4 { font-size: var(--font-size-lg); font-weight: 700; }
+h5, .h5 { font-size: var(--font-size-base); font-weight: 600; }
+h6, .h6 { font-size: var(--font-size-sm); font-weight: 600; }
+
+.muted, .text-muted { color: var(--color-text-muted); }
+.fw-semibold { font-weight: 600; }
+.tiny { font-size: var(--font-size-xs); }
+.small { font-size: var(--font-size-sm); }
+
+/* -----------------------------------------------------------------------------
+   Buttons
+   ----------------------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  min-height: 44px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 14px rgba(0, 140, 69, 0.4);
+}
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 140, 69, 0.5);
+  color: white;
+}
+
+.btn-secondary {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
+}
+.btn-secondary:hover {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+}
+
+.btn-danger {
+  background: var(--color-accent);
+  color: white;
+}
+.btn-danger:hover {
+  background: var(--color-accent-dark);
+}
+
+.btn-success {
+  background: var(--color-success);
+  color: white;
+}
+
+.btn-warning {
+  background: var(--color-warning);
+  color: #000;
+}
+
+.btn-sm {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  min-height: 32px;
+}
+
+/* -----------------------------------------------------------------------------
+   Cards & Surfaces
+   ----------------------------------------------------------------------------- */
+.card, .table-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.table-card {
+  box-shadow: var(--shadow-md);
+}
+
+.card-body {
+  padding: var(--space-lg);
+}
+
+/* -----------------------------------------------------------------------------
+   Tables (Fixtures)
+   ----------------------------------------------------------------------------- */
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 0;
+}
+
+.table thead th,
+.th {
+  background: var(--color-surface-elevated) !important;
+  color: var(--color-text-secondary);
+  font-weight: 700;
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: var(--space-md);
+  border-bottom: 2px solid var(--color-primary) !important;
+}
+
+.table tbody td,
+.td {
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  background: transparent !important;
+}
+
+.table-striped tbody tr:nth-of-type(odd) td {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+.table tbody tr:hover td {
+  background: rgba(0, 140, 69, 0.05) !important;
+}
+
+/* Bootstrap overrides for dark theme */
+.table-card .table,
+.table-card .table-striped {
+  --bs-table-bg: transparent;
+  --bs-table-striped-bg: rgba(255, 255, 255, 0.02);
+  --bs-table-hover-bg: rgba(0, 140, 69, 0.05);
+  --bs-table-border-color: var(--color-border);
+  --bs-table-color: #ffffff;
+  color: #ffffff !important;
+}
+
+/* Force white text on all table cells */
+.table th,
+.table td,
+.table-card th,
+.table-card td,
+.table-striped th,
+.table-striped td {
+  color: #ffffff !important;
+}
+
+/* Ensure Bootstrap table classes use white text */
+.table > :not(caption) > * > * {
+  color: #ffffff !important;
+  background-color: transparent;
+}
+
+/* Column widths */
+.col-kickoff { width: 100px; }
+.col-match { width: auto; }
+.col-user { width: 60px; }
+.col-result { width: 80px; }
+.col-status { width: 70px; }
+
+/* -----------------------------------------------------------------------------
+   Match Display
+   ----------------------------------------------------------------------------- */
+.match-title {
+  font-weight: 700;
+  font-size: var(--font-size-base);
+  margin-bottom: var(--space-sm);
+  color: var(--color-text);
+}
+
+.match-title .muted {
+  color: var(--color-text-muted);
+  font-weight: 400;
+  margin: 0 var(--space-xs);
+}
+
+/* Kickoff time */
+td.kickoff {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.kickoff-date {
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.kickoff-time {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   Prediction Buttons (1 / X / 2)
+   ----------------------------------------------------------------------------- */
+.choice {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.choice .radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-surface-elevated);
+  border: 2px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 48px;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.choice .radio:hover {
+  border-color: var(--color-primary);
+  background: rgba(0, 140, 69, 0.1);
+}
+
+.choice .radio:has(input:checked) {
+  border-color: var(--color-primary);
+  background: rgba(0, 140, 69, 0.2);
+  box-shadow: 0 0 0 2px rgba(0, 140, 69, 0.3);
+}
+
+.choice .radio input[type="radio"] {
+  accent-color: var(--color-primary);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.choice .radio:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.choice .radio .tiny {
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+}
+
+/* -----------------------------------------------------------------------------
+   Status Pills
+   ----------------------------------------------------------------------------- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  min-width: 48px;
+}
+
+.pill.live {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  animation: pulse-live 2s infinite;
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.pill.finished {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.pill.scheduled {
+  background: rgba(107, 114, 128, 0.2);
+  color: #9ca3af;
+  border: 1px solid rgba(107, 114, 128, 0.4);
+}
+
+.pill.postponed {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+/* -----------------------------------------------------------------------------
+   Prediction Badges
+   ----------------------------------------------------------------------------- */
+.pred-badge {
+  display: inline-block;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  margin-left: var(--space-sm);
+}
+
+.pred-saved {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.pred-unsaved {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.pred-missing {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* Pick display */
+.desk-pick {
+  font-weight: 700;
+  font-size: var(--font-size-sm);
+}
+
+.pick-correct {
+  color: var(--color-success) !important;
+  background: rgba(16, 185, 129, 0.15);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+}
+
+/* -----------------------------------------------------------------------------
+   Mobile Picks Row
+   ----------------------------------------------------------------------------- */
+.mobile-picks-row {
+  display: none;
+}
+
+.predictions-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 0;
+}
+
+.mb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+}
+
+.mb-chip.pick-correct {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.mb-name {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.mb-sep {
+  color: var(--color-text-muted);
+}
+
+.mb-pick {
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+/* Toggle link */
+.toggle-picks {
+  color: var(--color-primary-light);
+  font-size: var(--font-size-xs);
+  text-decoration: underline;
+}
+
+/* -----------------------------------------------------------------------------
+   Forms
+   ----------------------------------------------------------------------------- */
+.form-control {
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-size-base);
+  min-height: 44px;
+  transition: all 0.2s ease;
+}
+
+.form-control:focus {
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 140, 69, 0.2);
+  outline: none;
+  color: var(--color-text);
+}
+
+.form-control::placeholder {
+  color: var(--color-text-muted);
+}
+
+.form-control-sm {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-sm);
+  min-height: 36px;
+}
+
+.form-label {
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+}
+
+.form-select {
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  min-height: 44px;
+}
+
+.form-select:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 140, 69, 0.2);
+}
+
+/* -----------------------------------------------------------------------------
+   Alerts & Flash Messages
+   ----------------------------------------------------------------------------- */
+.alert {
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+  border: 1px solid;
+}
+
+.alert-success {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+}
+
+.alert-danger {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.alert-warning {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}
+
+.alert-info {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+/* -----------------------------------------------------------------------------
+   Badges
+   ----------------------------------------------------------------------------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+}
+
+.badge.bg-primary, .bg-primary {
+  background: var(--color-primary) !important;
+}
+
+.badge.bg-success, .bg-success {
+  background: var(--color-success) !important;
+}
+
+.badge.bg-danger, .bg-danger {
+  background: var(--color-accent) !important;
+}
+
+.badge.bg-warning, .bg-warning {
+  background: var(--color-warning) !important;
+  color: #000 !important;
+}
+
+.badge.bg-secondary, .bg-secondary {
+  background: var(--color-surface-elevated) !important;
+}
+
+/* -----------------------------------------------------------------------------
+   Leaderboard Medals
+   ----------------------------------------------------------------------------- */
+.rank-1 { color: #ffd700; } /* Gold */
+.rank-2 { color: #c0c0c0; } /* Silver */
+.rank-3 { color: #cd7f32; } /* Bronze */
+
+.rank-medal {
+  font-size: var(--font-size-lg);
+  margin-right: var(--space-sm);
+}
+
+.points-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 50px;
+  padding: var(--space-xs) var(--space-md);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  color: white;
+  font-weight: 800;
+  font-size: var(--font-size-base);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+}
+
+/* -----------------------------------------------------------------------------
+   Postponed Badge
+   ----------------------------------------------------------------------------- */
+.postponed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.postponed-badge:hover {
+  background: rgba(245, 158, 11, 0.25);
+  color: #fcd34d;
+}
+
+/* -----------------------------------------------------------------------------
+   Save Button (Sticky on Mobile)
+   ----------------------------------------------------------------------------- */
+.sticky-save {
+  display: none;
+}
+
+.save-all-predictions-btn {
+  padding: var(--space-md) var(--space-xl);
+  font-size: var(--font-size-base);
+  font-weight: 700;
+}
+
+/* -----------------------------------------------------------------------------
+   Responsive Design
+   ----------------------------------------------------------------------------- */
+
+/* Tablet */
+@media (max-width: 992px) {
+  .container {
+    padding: var(--space-md);
+  }
+
+  .col-user {
+    width: 50px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  /* Hide desktop columns */
+  .desktop-only,
+  .col-kickoff,
+  th.kickoff-col,
+  td.kickoff {
+    display: none !important;
+  }
+
+  /* Show mobile picks */
+  .mobile-picks-row {
+    display: table-row;
+  }
+
+  /* Adjust padding */
+  .table thead th,
+  .th,
+  .table tbody td,
+  .td {
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  /* Stack predictions vertically */
+  .predictions-strip {
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .mb-chip {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Sticky save button */
+  .sticky-save {
+    display: block;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: var(--space-md);
+    background: linear-gradient(0deg, var(--color-bg) 0%, transparent 100%);
+    z-index: 100;
+  }
+
+  .sticky-save .save-all-predictions-btn {
+    width: 100%;
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Add bottom padding to prevent content hiding behind sticky button */
+  .container {
+    padding-bottom: 100px;
+  }
+
+  /* Larger touch targets for radio buttons */
+  .choice .radio {
+    min-width: 52px;
+    min-height: 48px;
+    padding: var(--space-sm);
+  }
+
+  .choice {
+    gap: var(--space-md);
+  }
+
+  /* Better navbar on mobile */
+  .navbar-brand {
+    font-size: var(--font-size-base);
+  }
+
+  .navbar-brand::before {
+    width: 30px;
+    height: 30px;
+    font-size: var(--font-size-xs);
+  }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+  html {
+    font-size: 14px;
+  }
+
+  .table thead th,
+  .th,
+  .table tbody td,
+  .td {
+    padding: var(--space-sm);
+  }
+
+  .match-title {
+    font-size: var(--font-size-sm);
+  }
+
+  .h4 {
+    font-size: var(--font-size-lg);
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   Utilities
+   ----------------------------------------------------------------------------- */
+.text-center { text-align: center; }
+.text-end, .text-right { text-align: right; }
+.text-start, .text-left { text-align: left; }
+
+.d-flex { display: flex; }
+.d-inline-flex { display: inline-flex; }
+.d-block { display: block; }
+.d-inline-block { display: inline-block; }
+.d-none { display: none; }
+
+.align-items-center { align-items: center; }
+.justify-content-between { justify-content: space-between; }
+.justify-content-center { justify-content: center; }
+
+.flex-column { flex-direction: column; }
+.flex-wrap { flex-wrap: wrap; }
+
+.gap-1 { gap: var(--space-xs); }
+.gap-2 { gap: var(--space-sm); }
+.gap-3 { gap: var(--space-md); }
+
+.m-0 { margin: 0; }
+.mb-0 { margin-bottom: 0; }
+.mb-2 { margin-bottom: var(--space-sm); }
+.mb-3 { margin-bottom: var(--space-md); }
+.mb-4 { margin-bottom: var(--space-lg); }
+.mt-2 { margin-top: var(--space-sm); }
+.mt-3 { margin-top: var(--space-md); }
+.me-2 { margin-right: var(--space-sm); }
+.ms-auto { margin-left: auto; }
+
+.p-4 { padding: var(--space-lg); }
+.py-4 { padding-top: var(--space-lg); padding-bottom: var(--space-lg); }
+
+.w-100 { width: 100%; }
+
+.align-middle { vertical-align: middle; }
+
+/* Responsive display utilities */
+@media (max-width: 768px) {
+  .d-md-none { display: none !important; }
+  .d-md-table-cell { display: none !important; }
+}
+
+@media (min-width: 769px) {
+  .d-md-none { display: block; }
+  .d-md-table-cell { display: table-cell; }
+}
+
+/* -----------------------------------------------------------------------------
+   Coverage & Admin Tables
+   ----------------------------------------------------------------------------- */
+#coverage-table th,
+#coverage-table td {
+  color: var(--color-text) !important;
+}
+
+#coverage-table .muted,
+#coverage-table .text-muted {
+  color: var(--color-text-secondary) !important;
+}
+
+/* Admin specific */
+.table-bordered {
+  border: 1px solid var(--color-border);
+}
+
+.table-bordered th,
+.table-bordered td {
+  border: 1px solid var(--color-border);
+}
+
+/* Bootstrap dark overrides */
+.bg-dark {
+  background-color: var(--color-bg) !important;
+}
+
+.text-white {
+  color: var(--color-text) !important;
+}
+
+.border-bottom {
+  border-bottom: 1px solid var(--color-border) !important;
+}
+
+.border-secondary {
+  border-color: var(--color-border-strong) !important;
+}
+
+/* Form check inline */
+.form-check-inline {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0;
+}
+
+/* Number alignment */
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle text */
+.subtle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.footnote {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  margin-top: var(--space-md);
+}
+
+/* Table responsive */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Select styling */
+.select {
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+}
+
+/* Controls row for leaderboard */
+.board-controls {
+  margin-bottom: var(--space-lg);
+}
+
+.controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  align-items: flex-end;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* =============================================================================
+   CRITICAL: Force Light Text on Dark Background
+   These overrides ensure all text is visible on dark theme
+   ============================================================================= */
+
+/* Global text color enforcement */
+body,
+.bg-dark,
+.text-white {
+  color: #ffffff !important;
+}
+
+/* All table content must be white */
+table,
+table th,
+table td,
+table tr,
+.table,
+.table th,
+.table td,
+.table tr,
+.table-card table,
+.table-card th,
+.table-card td,
+.fixtures-table th,
+.fixtures-table td {
+  color: #ffffff !important;
+}
+
+/* Ensure scores and results are visible */
+.fw-semibold,
+.fw-bold,
+strong {
+  color: #ffffff !important;
+}
+
+/* Match titles */
+.match-title,
+.match-title span {
+  color: #ffffff !important;
+}
+
+.match-title .muted {
+  color: #9ca3af !important;
+}
+
+/* Predictions and picks */
+.desk-pick,
+.mb-pick,
+.mb-name {
+  color: #ffffff !important;
+}
+
+/* Radio labels */
+.choice .radio .tiny,
+.choice .tiny,
+.radio span {
+  color: #ffffff !important;
+}
+
+/* Form labels */
+.form-label {
+  color: #9ca3af !important;
+}
+
+/* Kickoff dates and times */
+.kickoff-date {
+  color: #ffffff !important;
+}
+
+.kickoff-time {
+  color: #9ca3af !important;
+}
+
+/* User columns in fixture table */
+.col-user,
+td.desktop-only {
+  color: #ffffff !important;
+}
+
+/* Navbar */
+.navbar-brand,
+.nav-link {
+  color: #ffffff !important;
+}
+
+.navbar-dark .navbar-nav .nav-link {
+  color: #9ca3af !important;
+}
+
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link.active {
+  color: #ffffff !important;
+}
+
+/* Cards */
+.card,
+.table-card,
+.card-body {
+  color: #ffffff !important;
+}
+
+/* Page headings */
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  color: #ffffff !important;
+}
+
+/* Leaderboard specific */
+.player-name,
+.rank-number,
+.points-badge {
+  color: #ffffff !important;
+}
+
+/* Muted text should be gray, not invisible */
+.muted,
+.text-muted,
+.small.text-muted {
+  color: #9ca3af !important;
+}
+
+/* Admin tables */
+.table-bordered th,
+.table-bordered td {
+  color: #ffffff !important;
+}
+
+/* Badges */
+.badge {
+  color: #ffffff !important;
+}
+
+.badge.bg-warning,
+.badge.text-bg-warning {
+  color: #000000 !important;
+}
+
+/* Inputs */
+input,
+select,
+textarea,
+.form-control,
+.form-select {
+  color: #ffffff !important;
+  background-color: var(--color-surface-elevated) !important;
+}
+
+input::placeholder,
+.form-control::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Links */
+a {
+  color: #00A651 !important;
+}
+
+a:hover {
+  color: #008C45 !important;
+}
+
+/* Nav links special handling */
+.navbar a,
+.nav-link {
+  color: #9ca3af !important;
+}
+
+.navbar a:hover,
+.nav-link:hover,
+.nav-link.active {
+  color: #ffffff !important;
+}
+
+.navbar-brand {
+  color: #ffffff !important;
+}
+
+/* Prediction chips on mobile */
+.mb-chip {
+  color: #ffffff !important;
+}
+
+.mb-sep {
+  color: #6b7280 !important;
+}
+
+/* Status text in pills */
+.pill {
+  color: inherit;
+}
+
+/* Toggle link */
+.toggle-picks {
+  color: #00A651 !important;
+}
+
+/* Subtle and footnote */
+.subtle,
+.footnote {
+  color: #9ca3af !important;
+}

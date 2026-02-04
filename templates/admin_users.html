@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Edit Results · Serie A Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="bg-dark text-white">
+  <!-- Navigation bar (reuses the same links as other pages) -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarAdminRes" aria-controls="navbarAdminRes" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarAdminRes">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Fixtures</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a></li>
+          {% if current_user.is_authenticated %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('history') }}">History</a></li>
+          {% endif %}
+          {% if current_user.is_authenticated and current_user.is_admin %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin') }}">Admin</a></li>
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_coverage') }}">Coverage</a></li>
+            <li class="nav-item"><a class="nav-link active" aria-current="page" href="{{ url_for('admin_results') }}">Edit results</a></li>
+          {% endif %}
+          {% if current_user.is_authenticated %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+          {% else %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">Register</a></li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container py-4">
+    <h1 class="h4 mb-4">Edit Results</h1>
+    <form class="row g-3 align-items-end mb-4" method="get" action="{{ url_for('admin_results') }}">
+      <div class="col-sm-4 col-md-3">
+        <label class="form-label small">Season</label>
+        <select name="season" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="this.form.submit()">
+          {% for s in seasons %}
+            <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-sm-4 col-md-3">
+        <label class="form-label small">Matchday</label>
+        <select name="matchday" class="form-select form-select-sm bg-dark text-white border-secondary" onchange="this.form.submit()">
+          {% for md in matchdays %}
+            <option value="{{ md }}" {% if md == matchday %}selected{% endif %}>MD {{ md }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto d-none">
+        <button type="submit" class="btn btn-sm btn-primary">Go</button>
+      </div>
+    </form>
+
+    {% if fixtures %}
+    <div class="table-responsive">
+      <table class="table table-striped table-bordered align-middle table-card">
+        <thead>
+          <tr>
+            <th class="th text-center">Kickoff</th>
+            <th class="th">Fixture</th>
+            <th class="th text-center">Current result</th>
+            <th class="th">Edit result &amp; kickoff</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in fixtures %}
+          <tr>
+            <td class="td kickoff text-center">
+              <div class="kickoff-date" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}"></div>
+              <div class="kickoff-time"></div>
+            </td>
+            <td class="td">
+              {{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}
+            </td>
+            <td class="td text-center">
+              {% if f.home_score is not none and f.away_score is not none %}
+                <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td class="td">
+              <form class="d-flex flex-wrap gap-2" method="post" action="{{ url_for('admin_update_result', fixture_id=f.id) }}">
+                <!-- Home score -->
+                <input type="number" name="home_score" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Home" style="width: 70px" value="{{ f.home_score if f.home_score is not none else '' }}">
+                <span class="muted d-inline-block" style="line-height: 1.6;">–</span>
+                <!-- Away score -->
+                <input type="number" name="away_score" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Away" style="width: 70px" value="{{ f.away_score if f.away_score is not none else '' }}">
+                <!-- Kickoff datetime editor.  Use datetime-local input to edit match_date.  Value is formatted to minutes. -->
+                <input type="datetime-local" name="match_date" class="form-control form-control-sm bg-dark text-white border-secondary" style="min-width: 190px" value="{{ f.match_date.strftime('%Y-%m-%dT%H:%M') }}">
+                <button type="submit" class="btn btn-sm btn-primary">Save</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <p class="muted">No fixtures found for this round.</p>
+    {% endif %}
+  </div>
+
+  <!-- Kickoff localisation script (copy from index.html) -->
+  <script>
+    function fmtDate(iso) {
+      try {
+        const d = new Date(iso);
+        return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      } catch {
+        return '';
+      }
+    }
+    function fmtTime(iso) {
+      try {
+        const d = new Date(iso);
+        return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return '';
+      }
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.kickoff-date').forEach(el => {
+        const iso = el.getAttribute('data-utc');
+        if (iso) el.textContent = fmtDate(iso);
+      });
+      document.querySelectorAll('.kickoff-time').forEach(el => {
+        const iso = el.parentElement.querySelector('.kickoff-date').getAttribute('data-utc');
+        if (iso) el.textContent = fmtTime(iso);
+      });
+    });
+  </script>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

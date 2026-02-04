@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Prediction Coverage · Serie A Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <!-- Inline overrides specifically for the coverage table to ensure white text
+       on dark backgrounds.  These rules take precedence over Bootstrap
+       defaults and our general styles. -->
+  <style>
+    /* Make all text in table headers and cells white */
+    .table-card .table th,
+    .table-card .table td {
+      color: #f8f9fa !important;
+    }
+    /* Slightly lighten the header background */
+    .table-card .table thead th {
+      background-color: rgba(255,255,255,0.05) !important;
+    }
+    /* Subtle striping for odd rows */
+    .table-card .table tbody tr:nth-of-type(odd) td {
+      background-color: rgba(255,255,255,0.02) !important;
+    }
+  </style>
+</head>
+<body class="bg-dark text-white">
+  <!-- Navigation bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCoverage" aria-controls="navbarCoverage" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarCoverage">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('index') }}">Fixtures</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a></li>
+          {% if current_user.is_authenticated %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('history') }}">History</a></li>
+          {% endif %}
+          {% if current_user.is_authenticated and current_user.is_admin %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin') }}">Admin</a></li>
+            <li class="nav-item"><a class="nav-link active" aria-current="page" href="{{ url_for('admin_coverage') }}">Coverage</a></li>
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_results') }}">Edit results</a></li>
+          {% endif %}
+          {% if current_user.is_authenticated %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">Logout</a></li>
+          {% else %}
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+            <li class="nav-item"><a class="nav-link" href="{{ url_for('register') }}">Register</a></li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container py-4">
+    <!-- Page header and filters -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+      <div>
+        <h1 class="h4 mb-1">Prediction Coverage</h1>
+        <div class="tiny muted">See which fixtures have missing picks (no selections are revealed).</div>
+      </div>
+      <form class="d-flex flex-wrap gap-2" method="get" action="{{ url_for('admin_coverage') }}">
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" name="season" onchange="this.form.submit()">
+          {% for s in seasons %}
+            <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+        <select class="form-select form-select-sm bg-dark text-white border-secondary" name="matchday" onchange="this.form.submit()">
+          {% for m in matchdays %}
+            <option value="{{ m }}" {% if m == matchday %}selected{% endif %}>MD {{ m }}</option>
+          {% endfor %}
+        </select>
+        <noscript><button class="btn btn-sm btn-primary" type="submit">Go</button></noscript>
+      </form>
+    </div>
+
+    <!-- Coverage table -->
+    <div class="card table-card">
+      <div class="card-body p-0">
+        <!-- Use a plain Bootstrap table with striped rows and force white text via the text-white class.
+             Removing the table-dark class avoids Bootstrap overriding our custom colours, and the
+             text-white class ensures all table content appears clearly on the dark background. -->
+        <table id="coverage-table" class="table table-striped align-middle mb-0 text-white">
+          <thead class="sticky-top">
+            <tr>
+              <th class="th">Kickoff</th>
+              <th class="th">Fixture</th>
+              <th class="th">Coverage</th>
+              <th class="th">Missing users</th>
+              <th class="th text-center">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              {% set f = row.fixture %}
+              <tr>
+                <td class="td">
+                  <div class="d-flex flex-column">
+                    <span class="kickoff-date tiny" data-utc="{{ f.match_date|utc_iso }}"></span>
+                    <span class="kickoff-time tiny muted" data-utc="{{ f.match_date|utc_iso }}"></span>
+                  </div>
+                </td>
+                <td class="td">
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="team">{{ f.home_team }}</span>
+                    <span class="muted">vs</span>
+                    <span class="team">{{ f.away_team }}</span>
+                  </div>
+                </td>
+                <td class="td" style="min-width:220px">
+                  <div class="tiny mb-1">{{ row.submitted_count }} / {{ row.total_players }} submitted</div>
+                  <div class="progress" style="height: 6px; background: rgba(255,255,255,.06);">
+                    {% set pct = (row.submitted_count / (row.total_players or 1)) * 100 %}
+                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ '%.0f'|format(pct) }}%"></div>
+                  </div>
+                </td>
+                <td class="td">
+                  {% if row.missing_users %}
+                    <div class="tiny">
+                      {% for u in row.missing_users %}
+                        <span class="mb-chip" title="{{ u.username }}">{{ u.username }}</span>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <span class="tiny muted">No one missing</span>
+                  {% endif %}
+                </td>
+                <td class="td text-center">
+                  {% if row.missing_users %}
+                    {% set userlist = row.missing_users | map(attribute='username') | list | join(', ') %}
+                    <button type="button" class="btn btn-sm btn-outline-light"
+                            onclick="copyToClipboard(`{{ userlist }}`); this.textContent='Copied'; setTimeout(()=>this.textContent='Copy names',1200);">
+                      Copy names
+                    </button>
+                  {% else %}
+                    <span class="tiny muted">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Kickoff localisation: convert ISO into local date/time strings
+    function fmtDate(iso){ try { const d=new Date(iso); return d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}); } catch { return ''; } }
+    function fmtTime(iso){ try { const d=new Date(iso); return d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'}); } catch { return ''; } }
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.kickoff-date').forEach(el => { const iso = el.getAttribute('data-utc'); if (iso) el.textContent = fmtDate(iso); });
+      document.querySelectorAll('.kickoff-time').forEach(el => { const iso = el.getAttribute('data-utc'); if (iso) el.textContent = fmtTime(iso); });
+    });
+    // Copy comma-separated usernames to clipboard
+    function copyToClipboard(text){ navigator.clipboard.writeText(text).catch(() => {}); }
+  </script>
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

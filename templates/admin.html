@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Admin · Serie A Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="bg-dark text-white">
+  <!-- Navigation bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarAdmin" aria-controls="navbarAdmin" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarAdmin">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('index') }}">Fixtures</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+          </li>
+          {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('history') }}">History</a>
+            </li>
+          {% endif %}
+          <li class="nav-item">
+            <a class="nav-link active" aria-current="page" href="{{ url_for('admin') }}">Admin</a>
+          </li>
+          {% if current_user.is_authenticated and current_user.is_admin %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin_coverage') }}">Coverage</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin_results') }}">Edit results</a>
+          </li>
+          {% endif %}
+          {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container py-4">
+    <h1 class="h4 mb-4">Admin</h1>
+    <!-- Invite management -->
+    <div class="mb-4">
+      <h2 class="h5 mb-3">Invite Codes</h2>
+      <form method="post" action="{{ url_for('admin') }}" class="row g-3 align-items-center mb-3">
+        <div class="col-auto">
+          <input type="text" name="code" class="form-control" placeholder="New invite code" required>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-secondary">Create</button>
+        </div>
+      </form>
+      {% if invites %}
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle">
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Code</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for invite in invites %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ invite.code }}</td>
+              <td>{% if invite.used_by_user_id %}Used{% else %}Unused{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="muted">No invite codes yet.</p>
+      {% endif %}
+    </div>
+
+    <!-- Maintenance actions -->
+    <div class="mb-4">
+      <h2 class="h5 mb-3">Maintenance</h2>
+      <form method="post" action="{{ url_for('admin_refresh') }}">
+        <button type="submit" class="btn btn-primary">Refresh fixtures now</button>
+      </form>
+    </div>
+
+    <!-- User management -->
+    <div class="mb-4">
+      <h2 class="h5 mb-3">User Management</h2>
+      {% if users %}
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered align-middle">
+          <thead>
+            <tr>
+              <th scope="col">Username</th>
+              <th scope="col">Role</th>
+              <th scope="col">Points</th>
+              <th scope="col">Bonus Points</th>
+              <th scope="col">Reset password</th>
+              <th scope="col">Delete</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for usr in users %}
+            <tr>
+              <td>{{ usr.username }}</td>
+              <td>{% if usr.is_admin %}Admin{% else %}User{% endif %}</td>
+              <td>
+                <span class="badge bg-primary">{{ usr.points }}</span>
+                <small class="text-muted">({{ usr.prediction_points }} + {{ usr.bonus_points or 0 }})</small>
+              </td>
+              <td>
+                <form class="d-flex" method="post" action="{{ url_for('admin_adjust_points', user_id=usr.id) }}">
+                  <input type="number" name="bonus_points" class="form-control form-control-sm me-2"
+                         value="{{ usr.bonus_points or 0 }}" style="width: 80px;">
+                  <button type="submit" class="btn btn-sm btn-success">Set</button>
+                </form>
+              </td>
+              <td>
+                <!-- Small form to set a new password -->
+                <form class="d-flex" method="post" action="{{ url_for('admin_reset_password', user_id=usr.id) }}">
+                  <input type="password" name="new_password" class="form-control form-control-sm me-2"
+                         placeholder="New password" required>
+                  <button type="submit" class="btn btn-sm btn-danger">Reset</button>
+                </form>
+              </td>
+              <td>
+                {% if not usr.is_admin and usr.id != current_user.id %}
+                <form method="post" action="{{ url_for('admin_delete_user', user_id=usr.id) }}" onsubmit="return confirm('Delete {{ usr.username }}?');">
+                  <button type="submit" class="btn btn-sm btn-warning">Delete</button>
+                </form>
+                {% else %}
+                <span class="muted small">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <p class="muted">No users found.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Leaderboard · Serie A Predictor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="bg-dark text-white">
+  <!-- Navigation -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarLeaderboard" aria-controls="navbarLeaderboard" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarLeaderboard">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('index') }}">Fixtures</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" aria-current="page" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+          </li>
+          {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('history') }}">History</a>
+            </li>
+          {% endif %}
+          {% if current_user.is_authenticated and current_user.is_admin %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('admin') }}">Admin</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('admin_coverage') }}">Coverage</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('admin_results') }}">Edit results</a>
+            </li>
+          {% endif %}
+          {% if current_user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container my-4">
+    <!-- Page Header -->
+    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-4 gap-3">
+      <div>
+        <h1 class="h3 m-0 mb-2">Leaderboard</h1>
+        <p class="text-muted small m-0">
+          {% if scope == 'week' %}
+            Matchday {{ matchday }} · {{ season }}
+          {% elif scope == 'season' %}
+            Season {{ season }}
+          {% else %}
+            All-time standings
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <form method="get" class="board-controls">
+      <div class="controls-row">
+        <div class="control">
+          <label for="scope" class="label">Scope</label>
+          <select id="scope" name="scope" class="form-select" onchange="this.form.submit()">
+            <option value="overall" {% if scope == 'overall' %}selected{% endif %}>Overall</option>
+            <option value="season" {% if scope == 'season' %}selected{% endif %}>Season</option>
+            <option value="week" {% if scope == 'week' %}selected{% endif %}>Matchday</option>
+          </select>
+        </div>
+        <div class="control">
+          <label for="season" class="label">Season</label>
+          <select id="season" name="season" class="form-select" onchange="this.form.submit()">
+            {% for s in seasons %}
+            <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if scope == 'week' %}
+        <div class="control">
+          <label for="matchday" class="label">Matchday</label>
+          <select id="matchday" name="matchday" class="form-select" onchange="this.form.submit()">
+            {% for md in matchdays %}
+            <option value="{{ md }}" {% if md|string == matchday|string %}selected{% endif %}>{{ md }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+      </div>
+    </form>
+
+    <!-- Leaderboard Table -->
+    <div class="table-card">
+      <div class="table-responsive">
+        <table class="table table-striped align-middle mb-0">
+          <thead>
+            <tr>
+              <th class="th" scope="col" style="width: 80px;">Rank</th>
+              <th class="th" scope="col">Player</th>
+              <th class="th text-end" scope="col" style="width: 120px;">Points</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for user in users %}
+            {% set username = user.username if user.username is defined else user['username'] %}
+            {% set pts = user.points if user.points is defined else user['points'] %}
+            <tr class="{% if loop.index <= 3 %}rank-{{ loop.index }}-row{% endif %}">
+              <td class="td">
+                <div class="d-flex align-items-center gap-2">
+                  {% if loop.index == 1 %}
+                    <span class="rank-medal" title="1st Place">🥇</span>
+                  {% elif loop.index == 2 %}
+                    <span class="rank-medal" title="2nd Place">🥈</span>
+                  {% elif loop.index == 3 %}
+                    <span class="rank-medal" title="3rd Place">🥉</span>
+                  {% else %}
+                    <span class="rank-number">{{ loop.index }}</span>
+                  {% endif %}
+                </div>
+              </td>
+              <td class="td">
+                <span class="player-name {% if loop.index <= 3 %}fw-bold{% endif %}">{{ username }}</span>
+              </td>
+              <td class="td text-end">
+                {% if loop.index <= 3 %}
+                  <span class="points-badge">{{ pts }}</span>
+                {% else %}
+                  <span class="fw-semibold">{{ pts }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% if users|length == 0 %}
+    <div class="card p-4 text-center mt-3">
+      <p class="text-muted mb-0">No standings available for this selection.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

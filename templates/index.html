@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>{{ season or 'Season' }} — Matchday {{ matchday or '—' }} · Serie A Predictor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+      .postponed-badge {
+        background: rgba(255, 193, 7, 0.15);
+        color: #ffc107;
+        border: 1px solid rgba(255, 193, 7, 0.3);
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.85rem;
+        text-decoration: none;
+      }
+      .postponed-badge:hover {
+        background: rgba(255, 193, 7, 0.25);
+        color: #ffc107;
+      }
+    </style>
+</head>
+<body class="bg-dark text-white">
+
+<!-- Primary navigation bar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{{ url_for('index') }}">Serie A Predictor</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navBar" aria-controls="navBar" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navBar">
+      <ul class="navbar-nav ms-auto">
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('leaderboard') }}">Leaderboard</a>
+        </li>
+        {% if current_user.is_authenticated %}
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('history') }}">History</a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="{{ url_for('postponed_fixtures_view') }}">Postponed</a>
+        </li>
+        {% endif %}
+        {% if current_user.is_authenticated and current_user.is_admin %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin') }}">Admin</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin_coverage') }}">Coverage</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('admin_results') }}">Edit results</a>
+          </li>
+        {% endif %}
+        {% if current_user.is_authenticated %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+          </li>
+        {% else %}
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('register') }}">Register</a>
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<div class="container my-4">
+    <form id="save-all" action="{{ url_for('save_all_predictions') }}" method="post" class="w-100">
+
+        <!-- Page header -->
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-3 gap-3">
+            <div>
+              <h1 class="h4 m-0">
+                  {{ season or 'Season' }} — Matchday {{ matchday or '—' }}
+              </h1>
+              {% if postponed_count and postponed_count > 0 %}
+                <a href="{{ url_for('postponed_fixtures_view', season=season) }}" class="postponed-badge mt-2 d-inline-block">
+                  ⏸️ {{ postponed_count }} postponed fixture{{ 's' if postponed_count > 1 else '' }}
+                </a>
+              {% endif %}
+            </div>
+            <button class="btn btn-primary save-all-predictions-btn" type="submit">💾 Save All Predictions</button>
+        </div>
+
+        {% if fixtures|length == 0 %}
+          <div class="card table-card p-4 text-center">
+            <p class="mb-2">No fixtures for this matchday.</p>
+            {% if postponed_count and postponed_count > 0 %}
+              <p class="text-muted small mb-0">Some fixtures may have been postponed. <a href="{{ url_for('postponed_fixtures_view', season=season) }}">View postponed fixtures</a></p>
+            {% else %}
+              <p class="text-muted small mb-0">Check back soon!</p>
+            {% endif %}
+          </div>
+        {% else %}
+        <div class="table-card">
+            <div class="table-responsive">
+                <table class="table table-striped fixtures-table align-middle mb-0">
+                    <colgroup>
+                        <col class="col-kickoff">
+                        <col class="col-match">
+                        {% for uid, uname in users_cols %}
+                          <col class="col-user desktop-only">
+                        {% endfor %}
+                        <col class="col-result">
+                        <col class="col-status">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th class="th kickoff-col text-center d-none d-md-table-cell">Kickoff</th>
+                            <th class="th">Match</th>
+                            {% for uid, uname in users_cols %}
+                              <th class="th desktop-only text-center" title="{{ uname }}">{{ uname }}</th>
+                            {% endfor %}
+                            <th class="th text-end">Result</th>
+                            <th class="th text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                          {% for f in fixtures %}
+                          {% set my = user_predictions.get(f.id) %}
+                          {% set fkey = f.match_id or f.id %}
+                          {% set locked = not f.is_open_for_prediction() %}
+                          {% set reveal = show_preds_flags.get(f.id) %}
+                          {% if f.home_score is not none and f.away_score is not none %}
+                            {% set outcome = '1' if f.home_score > f.away_score else ('2' if f.away_score > f.home_score else 'X') %}
+                          {% else %}
+                            {% set outcome = None %}
+                          {% endif %}
+
+                          <tr>
+                            <td class="td kickoff text-center d-none d-md-table-cell">
+                              <div class="kickoff-date" data-utc="{{ (f.match_date if f.match_date.tzinfo else f.match_date.replace(tzinfo=none))|utc_iso }}"></div>
+                              <div class="kickoff-time"></div>
+                            </td>
+
+                            <td class="td">
+                              <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+                              <a href="#" class="tiny toggle-picks d-md-none" data-target="picks-{{ f.id }}">Show picks</a>
+                              <div class="choice"
+                                   data-fixture-id="{{ f.id }}"
+                                   data-initial="{{ my.selection if my else '' }}">
+                                {% for opt, label in [('1','1'),('X','X'),('2','2')] %}
+                                  <label class="radio form-check-inline">
+                                    <input type="radio"
+                                           name="fixture_{{ f.id }}"
+                                           value="{{ opt }}"
+                                           {% if my and my.selection == opt %}checked{% endif %}
+                                           {% if locked %}disabled{% endif %}>
+                                    <span class="tiny">{{ label }}</span>
+                                  </label>
+                                {% endfor %}
+                                {% if locked and f.status != 'FINISHED' %}
+                                  <span class="tiny muted">Locked</span>
+                                {% endif %}
+                                <span class="pred-badge" id="pred-badge-{{ f.id }}"></span>
+                              </div>
+                            </td>
+
+                            {% for uid, uname in users_cols %}
+                              {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
+                              <td class="td desktop-only text-center">
+                                {% if reveal %}
+                                  <span class="desk-pick {{ 'pick-correct' if outcome and pick == outcome else '' }}">{{ pick or '—' }}</span>
+                                {% else %}
+                                  <span class="muted tiny">—</span>
+                                {% endif %}
+                              </td>
+                            {% endfor %}
+
+                            <td class="td text-end">
+                              {% if f.home_score is not none and f.away_score is not none %}
+                                <span class="fw-semibold">{{ f.home_score }}–{{ f.away_score }}</span>
+                              {% else %}
+                                <span class="muted">—</span>
+                              {% endif %}
+                            </td>
+
+                            <td class="td text-center">
+                              {% set s = f.display_status() %}
+                              <span class="pill
+                                          {% if s == 'LIVE' %} live
+                                          {% elif s == 'FT' %} finished
+                                          {% elif s == 'PP' %} postponed
+                                          {% else %} scheduled
+                                          {% endif %}">{{ s }}</span>
+                            </td>
+                          </tr>
+
+                          <tr id="picks-{{ f.id }}" class="mobile-picks-row d-none">
+                            <td class="td" colspan="{{ 2 + users_cols|length + 2 }}">
+                              {% if reveal %}
+                                <div class="predictions-strip">
+                              {% for uid, uname in users_cols %}
+                                {% set pick = pred_matrix.get((fkey, uid)) or pred_matrix.get((f.id, uid)) %}
+                                <span class="mb-chip {{ 'pick-correct' if outcome and pick == outcome else '' }}">
+                                  <span class="mb-name">{{ uname }}</span>
+                                  <span class="mb-sep">:</span>
+                                  <span class="mb-pick">{{ pick or '—' }}</span>
+                                </span>
+                              {% endfor %}
+                                </div>
+                              {% else %}
+                                <div class="tiny muted">Predictions hidden until kickoff.</div>
+                              {% endif %}
+                            </td>
+                          </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="sticky-save text-center mt-3">
+          <button class="btn btn-primary save-all-predictions-btn" type="submit">💾 Save All Predictions</button>
+        </div>
+    </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function fmtDate (iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function fmtTime (iso) {
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.kickoff-date').forEach(el => {
+    const iso = el.getAttribute('data-utc');
+    if (!iso) return;
+    el.textContent = fmtDate(iso);
+    const timeEl = el.parentElement.querySelector('.kickoff-time');
+    if (timeEl) timeEl.textContent = fmtTime(iso);
+  });
+});
+
+function setBadge (el, state) {
+  el.className = 'pred-badge ' + (
+    state === 'saved'   ? 'pred-saved' :
+    state === 'unsaved' ? 'pred-unsaved' :
+                          'pred-missing'
+  );
+  el.textContent =
+    state === 'saved'   ? 'Saved' :
+    state === 'unsaved' ? 'Unsaved changes' :
+                          'No pick';
+}
+function recomputeAllBadges () {
+  let unsavedCount = 0;
+  document.querySelectorAll('.choice[data-fixture-id]').forEach(choice => {
+    const fid = choice.getAttribute('data-fixture-id');
+    const initial = choice.getAttribute('data-initial') || '';
+    const checked = choice.querySelector('input[type=radio]:checked');
+    const val = checked ? checked.value : '';
+    const badge = document.getElementById('pred-badge-' + fid);
+    if (!badge) return;
+    if (!val) {
+      setBadge(badge, 'missing');
+    } else if (initial && val === initial) {
+      setBadge(badge, 'saved');
+    } else {
+      setBadge(badge, 'unsaved');
+      unsavedCount++;
+    }
+  });
+  document.querySelectorAll('.save-all-predictions-btn').forEach(btn => {
+    const base = '💾 Save All Predictions';
+    btn.textContent = unsavedCount > 0 ? `${base} (${unsavedCount})` : base;
+  });
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.choice input[type=radio]').forEach(r => {
+    r.addEventListener('change', recomputeAllBadges);
+  });
+  recomputeAllBadges();
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.toggle-picks').forEach(link => {
+    link.addEventListener('click', ev => {
+      ev.preventDefault();
+      const targetId = link.getAttribute('data-target');
+      if (!targetId) return;
+      const row = document.getElementById(targetId);
+      if (!row) return;
+      row.classList.toggle('d-none');
+      if (row.classList.contains('d-none')) {
+        link.textContent = 'Show picks';
+      } else {
+        link.textContent = 'Hide picks';
+      }
+    });
+  });
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
