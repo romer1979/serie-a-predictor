@@ -125,20 +125,7 @@ a:hover {
   letter-spacing: -0.5px;
 }
 
-.navbar-brand::before {
-  content: 'SA';
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
-  color: white;
-  font-weight: 900;
-  font-size: var(--font-size-sm);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-}
+/* Logo image is now added via HTML, no pseudo-element needed */
 
 .navbar-dark .navbar-nav .nav-link {
   color: var(--color-text-secondary);
@@ -852,11 +839,7 @@ td.kickoff {
     font-size: var(--font-size-base);
   }
 
-  .navbar-brand::before {
-    width: 30px;
-    height: 30px;
-    font-size: var(--font-size-xs);
-  }
+  /* Logo sizing handled via inline styles on img element */
 }
 
 /* Small phones */
