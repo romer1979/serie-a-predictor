@@ -1,4 +1,4 @@
-# Serie A Predictor
+# Hardamessa Lotto
 
 This repository contains a simple web application that allows invited users to
 predict the outcomes of upcoming Serie A matches and compete on a public

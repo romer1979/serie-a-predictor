@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>{% block title %}Serie A Predictor{% endblock %}</title>
+  <title>{% block title %}Hardamessa Lotto{% endblock %}</title>
 
   <!-- Inter font + main stylesheet -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,7 +21,7 @@
   <!-- Top nav -->
   <header class="site-header">
     <div class="container nav">
-      <a class="brand" href="{{ url_for('index') }}">⚽ Serie A Predictor</a>
+      <a class="brand" href="{{ url_for('index') }}">⚽ Hardamessa Lotto</a>
       <nav class="nav-links">
         <a href="{{ url_for('index') }}" class="{% if request.endpoint=='index' %}active{% endif %}">Fixtures</a>
         <a href="{{ url_for('leaderboard') }}" class="{% if request.endpoint=='leaderboard' %}active{% endif %}">Leaderboard</a>
