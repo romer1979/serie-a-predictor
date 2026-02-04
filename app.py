@@ -1,5 +1,5 @@
 """
-Hardamessa Lotto web application (cleaned + live-friendly).
+Hardamissa Lotto web application (cleaned + live-friendly).
 
 Key changes:
 - Manual score edits are preserved (won't be overwritten by API)
