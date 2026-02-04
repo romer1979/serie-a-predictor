@@ -21,7 +21,7 @@
   <!-- Top nav -->
   <header class="site-header">
     <div class="container nav">
-      <a class="brand" href="{{ url_for('index') }}">⚽ Hardamessa Lotto</a>
+      <a class="brand" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='hardamessa.png') }}" alt="Logo" style="width: 28px; height: 28px; border-radius: 50%; vertical-align: middle; margin-right: 8px;">Hardamessa Lotto</a>
       <nav class="nav-links">
         <a href="{{ url_for('index') }}" class="{% if request.endpoint=='index' %}active{% endif %}">Fixtures</a>
         <a href="{{ url_for('leaderboard') }}" class="{% if request.endpoint=='leaderboard' %}active{% endif %}">Leaderboard</a>
