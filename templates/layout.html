@@ -5,119 +5,108 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}Hardamissa Lotto{% endblock %}</title>
 
-  <!-- App styles -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400;1,9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,400&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 
-  <!-- Lightweight system font stack for a crisper look -->
-  <style>
-    :root{
-      --bg:#0b0f19; --panel:#121827; --muted:#94a3b8; --text:#e5e7eb; --accent:#22d3ee;
-      --ok:#10b981; --warn:#f59e0b; --bad:#ef4444; --live:#ef4444; --card:#0f1625;
-      --chip:#1f2937; --chip-text:#cbd5e1; --border:#1f2937;
-    }
-    html,body{height:100%;}
-    body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial}
-    a{color:var(--accent);text-decoration:none}
-    .wrap{max-width:1100px;margin:0 auto;padding:24px}
-    .nav{display:flex;gap:16px;align-items:center;justify-content:space-between;background:var(--panel);border-bottom:1px solid var(--border)}
-    .nav .wrap{display:flex;align-items:center;gap:18px}
-    .brand{display:flex;align-items:center;gap:10px;font-weight:700}
-    .brand .badge{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#0ea5e9,#22d3ee);color:#00131a;font-weight:800}
-    .nav-links{display:flex;gap:12px}
-    .nav a{padding:8px 10px;border-radius:10px}
-    .nav a:hover{background:#0e1423}
-    .nav .me{color:var(--muted);font-size:13px}
-    .btn{appearance:none;border:0;border-radius:12px;padding:10px 14px;background:#1f2a44;color:#e8f3ff;cursor:pointer}
-    .btn:hover{background:#223052}
-    .btn.primary{background:linear-gradient(135deg,#06b6d4,#22d3ee);color:#002531}
-    .btn.ghost{background:transparent;border:1px solid var(--border)}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px}
-    .pill.live{background:rgba(239,68,68,.12);color:#fecaca;border:1px solid rgba(239,68,68,.3)}
-    .pill.scheduled{background:rgba(34,211,238,.12);color:#a5f3fc;border:1px solid rgba(34,211,238,.25)}
-    .pill.finished{background:rgba(16,185,129,.12);color:#bbf7d0;border:1px solid rgba(16,185,129,.25)}
-    .grid{display:grid;gap:18px}
-    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px}
-    .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
-    .muted{color:var(--muted)}
-    .teams{display:flex;flex-direction:column;gap:4px;font-weight:600}
-    .teams span{display:flex;align-items:center;gap:8px}
-    .score{font-weight:800;letter-spacing:.5px}
-    .choice{display:flex;gap:8px}
-    .radio{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--border);border-radius:10px;background:#0c1322}
-    .radio input{accent-color:#22d3ee}
-    .footer{margin-top:36px;padding:24px 0;color:var(--muted);font-size:12px;border-top:1px solid var(--border)}
-    .section-title{display:flex;align-items:center;justify-content:space-between;margin:8px 0 4px}
-    .tiny{font-size:12px}
-    .stack{display:flex;flex-direction:column;gap:8px}
-    .preds{display:flex;flex-wrap:wrap;gap:6px}
-    .chip{background:var(--chip);color:var(--chip-text);padding:4px 8px;font-size:12px;border-radius:12px}
-    @media (max-width:720px){ .nav .wrap{padding-inline:16px} .wrap{padding:18px} }
-  </style>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%231a1310'/%3E%3Ctext x='32' y='42' text-anchor='middle' font-family='serif' font-weight='800' font-size='28' fill='%23fdf6ec'%3EHL%3C/text%3E%3C/svg%3E">
 
-  <!-- Favicon (inline SVG, no 404s) -->
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%2306b6d4'/%3E%3Ccircle cx='32' cy='32' r='22' fill='white'/%3E%3Ccircle cx='32' cy='32' r='10' fill='%2306b6d4'/%3E%3C/svg%3E">
-  <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4EAAA..." />
   {% block head %}{% endblock %}
 </head>
-<body>
-  <header class="nav">
-    <div class="wrap">
-      <div class="brand">
-        <img src="{{ url_for('static', filename='Hardamissa.jpg') }}" alt="Logo" style="width: 40px; height: 40px; border-radius: 50%;">
-        <a href="{{ url_for('index') }}">Hardamissa Lotto</a>
-      </div>
-      <nav class="nav-links">
-        <a href="{{ url_for('index') }}">Home</a>
-        <a href="{{ url_for('leaderboard') }}">Leaderboard</a>
-        {% if current_user.is_authenticated and current_user.is_admin %}
-          <a href="{{ url_for('admin') }}">Admin</a>
-        {% endif %}
-      </nav>
-      <div class="nav-links">
+<body class="theme-gazzetta">
+
+  <header class="site-nav">
+    <div class="nav-inner">
+      <a class="brand" href="{{ url_for('index') }}">
+        <span class="brand-mark">HL</span>
+        <span class="brand-name">Hardamissa Lotto</span>
+      </a>
+      <button class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="primary-nav">☰</button>
+      <ul id="primary-nav" class="nav-links">
+        <li><a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="active"{% endif %}>Fixtures</a></li>
+        <li><a href="{{ url_for('leaderboard') }}" {% if request.endpoint == 'leaderboard' %}class="active"{% endif %}>Leaderboard</a></li>
         {% if current_user.is_authenticated %}
-          <span class="me tiny">Hi, {{ current_user.username }}</span>
-          <a class="btn ghost tiny" href="{{ url_for('logout') }}">Logout</a>
-        {% else %}
-          <a class="btn ghost tiny" href="{{ url_for('login') }}">Login</a>
+          <li><a href="{{ url_for('history') }}" {% if request.endpoint == 'history' %}class="active"{% endif %}>History</a></li>
+          <li><a href="{{ url_for('postponed_fixtures_view') }}" {% if request.endpoint == 'postponed_fixtures_view' %}class="active"{% endif %}>Postponed</a></li>
         {% endif %}
-      </div>
+        {% if current_user.is_authenticated and current_user.is_admin %}
+          <li><a href="{{ url_for('admin') }}" {% if request.endpoint and request.endpoint.startswith('admin') %}class="active"{% endif %}>Admin</a></li>
+        {% endif %}
+        {% if current_user.is_authenticated %}
+          <li><a href="{{ url_for('logout') }}">Logout</a></li>
+        {% else %}
+          <li><a href="{{ url_for('login') }}" {% if request.endpoint == 'login' %}class="active"{% endif %}>Login</a></li>
+          <li><a href="{{ url_for('register') }}" {% if request.endpoint == 'register' %}class="active"{% endif %}>Register</a></li>
+        {% endif %}
+      </ul>
     </div>
   </header>
 
-  <main class="wrap">
+  <main class="container">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
-        <div class="stack" style="margin-bottom:12px">
-          {% for category, message in messages %}
-            <div class="card" role="alert" aria-live="polite">
-              <span class="tiny">{{ message }}</span>
-            </div>
-          {% endfor %}
-        </div>
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category if category in ['success','danger','warning','info'] else 'info' }}" role="alert" aria-live="polite">
+            {{ message }}
+          </div>
+        {% endfor %}
       {% endif %}
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="footer wrap">
-    <div>Times are shown in your local time. Data: football-data.org (free tier).</div>
+  <footer class="site-footer">
+    Times shown in your local time. Data: football-data.org (free tier).
   </footer>
 
-  <!-- Local time rendering: find <time data-utc="..."> and display in locale -->
   <script>
-    (function(){
-      function fmt(dt){
-        try{
-          const d = new Date(dt);
-          const date = d.toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
-          const time = d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
-          return date + " · " + time;
-        }catch(e){ return dt; }
+    (function () {
+      var toggle = document.querySelector('.nav-toggle');
+      var links = document.getElementById('primary-nav');
+      if (toggle && links) {
+        toggle.addEventListener('click', function () {
+          var open = links.classList.toggle('open');
+          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        links.querySelectorAll('a').forEach(function (a) {
+          a.addEventListener('click', function () {
+            links.classList.remove('open');
+            toggle.setAttribute('aria-expanded', 'false');
+          });
+        });
       }
-      document.querySelectorAll("time[data-utc]").forEach(t=>{
-        const iso = t.getAttribute("data-utc");
-        if(iso) t.textContent = fmt(iso);
+    })();
+  </script>
+
+  <script>
+    (function () {
+      function fmtDate(iso) {
+        var d = new Date(iso);
+        return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      }
+      function fmtTime(iso) {
+        var d = new Date(iso);
+        return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      }
+      function fmtDateTime(iso) {
+        return fmtDate(iso) + ' · ' + fmtTime(iso);
+      }
+      document.querySelectorAll('.kickoff-date[data-utc]').forEach(function (el) {
+        var iso = el.getAttribute('data-utc');
+        if (!iso) return;
+        el.textContent = fmtDate(iso);
+        var sib = el.parentElement && el.parentElement.querySelector('.kickoff-time');
+        if (sib) sib.textContent = fmtTime(iso);
+      });
+      document.querySelectorAll('.rescheduled-datetime[data-utc]').forEach(function (el) {
+        var iso = el.getAttribute('data-utc');
+        if (iso) el.textContent = fmtDateTime(iso);
+      });
+      document.querySelectorAll('time[data-utc]').forEach(function (t) {
+        var iso = t.getAttribute('data-utc');
+        if (iso) t.textContent = fmtDateTime(iso);
       });
     })();
   </script>
