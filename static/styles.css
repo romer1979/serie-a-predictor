@@ -917,6 +917,96 @@ label.radio {
   color: var(--muted);
 }
 
+/* -------- Admin: section / progress / inline edit panel -------- */
+.admin-section {
+  margin-bottom: 28px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.admin-section:last-child { border-bottom: 0; }
+.admin-section h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+  margin: 0 0 14px;
+}
+.admin-form-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.admin-form-row .form-control { width: auto; min-width: 220px; }
+.admin-form-row .form-select { width: auto; min-width: 160px; }
+
+.progress {
+  height: 6px;
+  background: var(--rule-soft);
+  border-radius: 0;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--ok);
+  display: block;
+}
+
+.manual-badge {
+  display: inline-block;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  margin-left: 6px;
+}
+
+.status-badge.status-finished { color: var(--ok); border-color: var(--ok); }
+.status-badge.status-scheduled { color: var(--muted); border-color: var(--rule-soft); }
+.status-badge.status-live {
+  color: var(--live);
+  border-color: var(--live);
+  animation: pulse 2s infinite;
+}
+
+.fixture-row.postponed td { opacity: 0.7; }
+
+.edit-panel {
+  display: none;
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+}
+.edit-panel.open { display: block; }
+.edit-panel .edit-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+@media (min-width: 600px) {
+  .edit-panel .edit-grid { grid-template-columns: 1fr 1fr; }
+}
+.edit-panel .score-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.edit-panel .score-row .form-field { width: 70px; }
+.edit-panel .score-row .form-control { width: 70px; min-width: 0; padding: 8px 10px; }
+.edit-panel .score-sep {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  color: var(--muted);
+  padding-bottom: 10px;
+}
+
 /* -------- Utility -------- */
 .text-center { text-align: center; }
 .text-end, .text-right { text-align: right; }
