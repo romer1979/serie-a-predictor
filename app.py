@@ -809,7 +809,11 @@ def weekly_user_points(season: str, matchday: str):
 
 
 def current_season_from_db() -> str | None:
-    row = db.session.query(Fixture.season).order_by(Fixture.season.desc()).first()
+    row = (
+        db.session.query(Fixture.season)
+        .order_by(Fixture.match_date.desc())
+        .first()
+    )
     return row[0] if row else None
 
 
