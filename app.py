@@ -108,7 +108,7 @@ COMPETITIONS = {
     },
     "WC": {
         "code": "WC",
-        "display_name": "World Cup 2026",
+        "display_name": "World",
         "api_code": "WC",
         "theme_class": "theme-worldcup",
         "url_prefix": "/world-cup",
