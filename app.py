@@ -305,16 +305,95 @@ def load_user(user_id: str):
 # Data fetch / sync
 # -----------------------------------------------------------------------------
 
-def fetch_fixtures_from_api() -> list[dict]:
+# Ordering for World Cup stage labels — used to sort "matchday" strings into
+# chronological order. Higher number = later in the tournament.
+WC_STAGE_ORDER = {
+    "Group MD 1":      10,
+    "Group MD 2":      11,
+    "Group MD 3":      12,
+    "Round of 32":     20,
+    "Round of 16":     30,
+    "Quarter-Finals":  40,
+    "Semi-Finals":     50,
+    "Third Place":     60,
+    "Final":           70,
+}
+
+
+def _wc_matchday_label(stage: str | None, matchday_num) -> str:
+    """Translate a football-data.org WC stage into a friendly matchday label.
+
+    Group stage matches get a per-round label (Group MD 1/2/3) using the
+    API's `matchday` field. Knockout stages are mapped to their common
+    English names. Unknown stages fall back to a title-cased version of
+    the raw API value so nothing is silently dropped.
+    """
+    s = (stage or "").upper().replace("-", "_")
+    if s == "GROUP_STAGE":
+        n = matchday_num if matchday_num else 1
+        return f"Group MD {n}"
+    mapping = {
+        "LAST_32":            "Round of 32",
+        "ROUND_OF_32":        "Round of 32",
+        "LAST_16":            "Round of 16",
+        "ROUND_OF_16":        "Round of 16",
+        "LAST_8":             "Quarter-Finals",
+        "QUARTER_FINALS":     "Quarter-Finals",
+        "LAST_4":             "Semi-Finals",
+        "SEMI_FINALS":        "Semi-Finals",
+        "THIRD_PLACE":        "Third Place",
+        "THIRD_PLACE_FINAL":  "Third Place",
+        "FINAL":              "Final",
+    }
+    return mapping.get(s, s.replace("_", " ").title()) if s else ""
+
+
+def _matchday_sort_key(md: str | None, competition_code: str):
+    """Sort key for matchdays.
+
+    Serie A matchdays are integers ('1'..'38'). World Cup matchdays are
+    stage labels; we look them up in WC_STAGE_ORDER for a chronological
+    sort instead of a misleading lexicographic one.
+    """
+    if md is None:
+        return (9, 9999, "")
+    if competition_code == "WC":
+        return (0, WC_STAGE_ORDER.get(md, 999), md)
+    try:
+        return (0, int(md), "")
+    except (TypeError, ValueError):
+        return (1, 0, md)
+
+
+def fetch_fixtures_from_api(competition_code: str = "SA") -> list[dict]:
+    """Fetch fixtures from football-data.org for one competition.
+
+    Empty list on missing API key, unknown competition, non-200 response,
+    or any network error — callers should treat empty as "nothing to sync
+    this tick" rather than fatal.
+    """
     api_key = os.environ.get("FOOTBALL_DATA_API_KEY")
     if not api_key:
         return []
 
-    today = datetime.now().date()
-    season_start_year = today.year if today.month >= 7 else today.year - 1
-    season_str = f"{season_start_year}-{(season_start_year + 1) % 100:02d}"
+    comp = COMPETITIONS.get(competition_code)
+    if not comp:
+        return []
+    api_code = comp["api_code"]
 
-    url = "https://api.football-data.org/v4/competitions/SA/matches"
+    today = datetime.now().date()
+
+    # Each competition decides its own season string. World Cup 2026 is a
+    # single-summer tournament so it gets a fixed "2026" tag; club leagues
+    # use the standard "YYYY-YY" form rolling over in July.
+    if competition_code == "WC":
+        season_start_year = 2026
+        season_str = "2026"
+    else:
+        season_start_year = today.year if today.month >= 7 else today.year - 1
+        season_str = f"{season_start_year}-{(season_start_year + 1) % 100:02d}"
+
+    url = f"https://api.football-data.org/v4/competitions/{api_code}/matches"
     headers = {"X-Auth-Token": api_key}
     params = {"season": season_start_year}
 
@@ -334,7 +413,7 @@ def fetch_fixtures_from_api() -> list[dict]:
             continue
         utc_date_str = match["utcDate"]
         utc_dt = datetime.fromisoformat(utc_date_str.replace("Z", "+00:00"))
-        
+
         score = match.get("score", {}) or {}
         ft = score.get("fullTime") or {}
         home_ft = ft.get("home")
@@ -345,17 +424,23 @@ def fetch_fixtures_from_api() -> list[dict]:
             home_ft = reg.get("home") if home_ft is None else home_ft
             away_ft = reg.get("away") if away_ft is None else away_ft
 
+        # Matchday label depends on the competition shape.
+        if competition_code == "WC":
+            matchday_label = _wc_matchday_label(match.get("stage"), match.get("matchday"))
+        else:
+            matchday_label = str(match.get("matchday"))
+
         fixtures.append({
             "match_id": str(match["id"]),
             "match_date": utc_dt,
             "home_team": match["homeTeam"]["name"],
             "away_team": match["awayTeam"]["name"],
             "season": season_str,
-            "matchday": str(match.get("matchday")),
+            "matchday": matchday_label,
             "status": status,
             "home_score": home_ft if home_ft is not None else None,
             "away_score": away_ft if away_ft is not None else None,
-            "competition_code": "SA",
+            "competition_code": competition_code,
         })
     return fixtures
 
@@ -406,9 +491,9 @@ def fetch_fixtures_from_fallback() -> list[dict]:
 
 def update_fixtures() -> None:
     """
-    Sync local fixtures with API (if key present) or fallback file.
-    
-    IMPORTANT: 
+    Sync local fixtures across all competitions (Serie A + World Cup).
+
+    IMPORTANT:
     - Skip updates for fixtures where status_manually_edited is True
     - Only skip score updates when scores_manually_edited is True
     """
@@ -417,8 +502,16 @@ def update_fixtures() -> None:
     except Exception:
         pass
 
-    fixtures_from_api = fetch_fixtures_from_api()
-    fixtures_to_use = fixtures_from_api if fixtures_from_api else fetch_fixtures_from_fallback()
+    # Sync each competition independently. If the API call for one fails we
+    # still want the others to proceed.
+    fixtures_to_use: list[dict] = []
+
+    # Serie A: API first, fall back to bundled JSON if the call returns empty
+    sa_from_api = fetch_fixtures_from_api("SA")
+    fixtures_to_use.extend(sa_from_api if sa_from_api else fetch_fixtures_from_fallback())
+
+    # World Cup 2026: API only. Silent no-op if the plan tier excludes it.
+    fixtures_to_use.extend(fetch_fixtures_from_api("WC"))
 
     for fi in fixtures_to_use:
         existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
@@ -470,9 +563,11 @@ def update_fixtures() -> None:
             dt = fi['match_date']
             lo = dt - timedelta(hours=12)
             hi = dt + timedelta(hours=12)
+            comp_code = fi.get('competition_code', 'SA')
             legacy = (
                 Fixture.query
                 .filter(
+                    Fixture.competition_code == comp_code,
                     Fixture.season == fi['season'],
                     func.lower(Fixture.home_team) == fi['home_team'].lower(),
                     func.lower(Fixture.away_team) == fi['away_team'].lower(),
@@ -482,11 +577,12 @@ def update_fixtures() -> None:
                 .order_by(Fixture.match_date.asc())
                 .first()
             )
-            
+
             if not legacy and fi.get('matchday'):
                 legacy = (
                     Fixture.query
                     .filter(
+                        Fixture.competition_code == comp_code,
                         Fixture.season == fi['season'],
                         Fixture.matchday == fi['matchday'],
                         func.lower(Fixture.home_team) == fi['home_team'].lower(),
@@ -721,85 +817,98 @@ def evaluate_predictions() -> None:
 
 
 # Season/matchday helpers
-def seasons_available() -> list[str]:
-    rows = db.session.query(Fixture.season).distinct().all()
+#
+# All of these accept a `competition_code` (default 'SA' so existing Serie A
+# routes keep working unchanged). Phase 3 will add World Cup routes that pass
+# 'WC' through to isolate the WC view from Serie A data.
+
+def seasons_available(competition_code: str = "SA") -> list[str]:
+    rows = (
+        db.session.query(Fixture.season)
+        .filter(Fixture.competition_code == competition_code)
+        .distinct()
+        .all()
+    )
     return sorted([r[0] for r in rows])
 
 
-def matchdays_for(season: str) -> list[str]:
+def matchdays_for(season: str, competition_code: str = "SA") -> list[str]:
     rows = (
         db.session.query(Fixture.matchday)
-        .filter(Fixture.season == season)
+        .filter(
+            Fixture.season == season,
+            Fixture.competition_code == competition_code,
+        )
         .distinct()
         .all()
     )
     days = [r[0] for r in rows if r[0]]
-    try:
-        return [str(x) for x in sorted({int(d) for d in days})]
-    except Exception:
-        return sorted(set(days))
+    return sorted(set(days), key=lambda d: _matchday_sort_key(d, competition_code))
 
 
-def latest_completed_matchday(season: str) -> str | None:
+def latest_completed_matchday(season: str, competition_code: str = "SA") -> str | None:
     """Find the latest matchday where all non-postponed fixtures have scores."""
     if not season:
         return None
-    
-    days = matchdays_for(season)
+
+    days = matchdays_for(season, competition_code)
     if not days:
         return None
-    
-    try:
-        sorted_days = [str(n) for n in sorted({int(d) for d in days}, reverse=True)]
-    except Exception:
-        sorted_days = sorted(set(days), key=lambda s: (len(s), s), reverse=True)
-    
+
+    sorted_days = sorted(
+        set(days),
+        key=lambda d: _matchday_sort_key(d, competition_code),
+        reverse=True,
+    )
+
     for md in sorted_days:
         # Get non-postponed fixtures for this matchday
         fixtures = Fixture.query.filter(
+            Fixture.competition_code == competition_code,
             Fixture.season == season,
             Fixture.matchday == md,
             ~Fixture.status.in_(EXCLUDED_FROM_CURRENT)
         ).all()
-        
+
         if not fixtures:
             continue
-            
+
         all_complete = all(
             (f.home_score is not None and f.away_score is not None)
             for f in fixtures
         )
-        
+
         if all_complete:
             return md
-    
+
     return None
 
 
-def current_home_matchday(season: str) -> str | None:
+def current_home_matchday(season: str, competition_code: str = "SA") -> str | None:
     """
     Determine which matchday to present on the home page.
-    
+
     Prioritises the earliest matchday that has any non-postponed fixture
     without final results.
     """
     if not season:
         return None
 
-    days = matchdays_for(season)
+    days = matchdays_for(season, competition_code)
     if not days:
         return None
-        
-    try:
-        sorted_days = [str(n) for n in sorted({int(d) for d in days})]
-    except Exception:
-        sorted_days = sorted(set(days), key=lambda s: (len(s), s))
+
+    sorted_days = sorted(
+        set(days),
+        key=lambda d: _matchday_sort_key(d, competition_code),
+    )
 
     for md in sorted_days:
         # Check for incomplete non-postponed fixtures
         incomplete = (
             db.session.query(Fixture.id)
             .filter(
+                Fixture.competition_code == competition_code,
                 Fixture.season == season,
                 Fixture.matchday == md,
                 ~Fixture.status.in_(EXCLUDED_FROM_CURRENT),
@@ -813,16 +922,20 @@ def current_home_matchday(season: str) -> str | None:
         if incomplete is not None:
             return md
 
-    return latest_completed_matchday(season)
+    return latest_completed_matchday(season, competition_code)
 
 
-def weekly_user_points(season: str, matchday: str):
+def weekly_user_points(season: str, matchday: str, competition_code: str = "SA"):
     """Return (user_id, username, points) for the given season and matchday."""
     predictions = (
         db.session.query(Prediction, Fixture, User)
         .join(Fixture, Fixture.id == Prediction.fixture_id)
         .join(User, User.id == Prediction.user_id)
-        .filter(Fixture.season == season, Fixture.matchday == str(matchday))
+        .filter(
+            Fixture.competition_code == competition_code,
+            Fixture.season == season,
+            Fixture.matchday == str(matchday),
+        )
         .all()
     )
     user_points: dict[int, int] = {}
@@ -840,29 +953,38 @@ def weekly_user_points(season: str, matchday: str):
     return sorted(rows, key=lambda r: (-r[2], r[1].lower()))
 
 
-def current_season_from_db() -> str | None:
+def current_season_from_db(competition_code: str = "SA") -> str | None:
     row = (
         db.session.query(Fixture.season)
+        .filter(Fixture.competition_code == competition_code)
         .order_by(Fixture.match_date.desc())
         .first()
     )
     return row[0] if row else None
 
 
-def all_matchdays_for_season(season: str) -> list[str]:
-    rows = db.session.query(distinct(Fixture.matchday)).filter(Fixture.season == season).all()
+def all_matchdays_for_season(season: str, competition_code: str = "SA") -> list[str]:
+    rows = (
+        db.session.query(distinct(Fixture.matchday))
+        .filter(
+            Fixture.competition_code == competition_code,
+            Fixture.season == season,
+        )
+        .all()
+    )
     mds = [r[0] for r in rows if r[0] is not None]
-    try:
-        return [str(n) for n in sorted({int(x) for x in mds})]
-    except Exception:
-        return sorted(set(mds), key=lambda s: (len(s), s))
+    return sorted(set(mds), key=lambda d: _matchday_sort_key(d, competition_code))
 
 
-def classify_matchdays(season: str):
+def classify_matchdays(season: str, competition_code: str = "SA"):
     now_utc = datetime.now(timezone.utc)
     md_status = {}
-    for md in all_matchdays_for_season(season):
-        qs = Fixture.query.filter_by(season=season, matchday=md).all()
+    for md in all_matchdays_for_season(season, competition_code):
+        qs = Fixture.query.filter_by(
+            competition_code=competition_code,
+            season=season,
+            matchday=md,
+        ).all()
         statuses = {f.status for f in qs}
         if any(s in ("IN_PLAY","PAUSED") for s in statuses):
             md_status[md] = "live"
@@ -870,17 +992,17 @@ def classify_matchdays(season: str):
             md_status[md] = "finished"
         elif any(s in ("SCHEDULED","TIMED") for s in statuses):
             future = Fixture.query.filter(
-                Fixture.season==season,
-                Fixture.matchday==md,
-                Fixture.match_date>=now_utc
+                Fixture.competition_code == competition_code,
+                Fixture.season == season,
+                Fixture.matchday == md,
+                Fixture.match_date >= now_utc,
             ).count()
             md_status[md] = "upcoming" if future else "finished"
         else:
             md_status[md] = "other"
 
     def _order(lst):
-        try: return [str(n) for n in sorted({int(x) for x in lst})]
-        except: return sorted(set(lst), key=lambda s: (len(s), s))
+        return sorted(set(lst), key=lambda d: _matchday_sort_key(d, competition_code))
 
     finished = _order([m for m,s in md_status.items() if s=="finished"])
     live = _order([m for m,s in md_status.items() if s=="live"])
@@ -889,13 +1011,16 @@ def classify_matchdays(season: str):
     return finished, live, upcoming, other
 
 
-def season_user_points(season: str):
+def season_user_points(season: str, competition_code: str = "SA"):
     """Return list of dicts {username: points} for the specified season."""
     predictions = (
         db.session.query(Prediction, Fixture, User)
         .join(Fixture, Fixture.id == Prediction.fixture_id)
         .join(User, User.id == Prediction.user_id)
-        .filter(Fixture.season == season)
+        .filter(
+            Fixture.competition_code == competition_code,
+            Fixture.season == season,
+        )
         .all()
     )
     user_points: dict[str, int] = {}
