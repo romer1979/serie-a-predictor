@@ -411,6 +411,16 @@ def fetch_fixtures_from_api(competition_code: str = "SA") -> list[dict]:
         # Include POSTPONED status from API
         if status not in ("SCHEDULED", "TIMED", "IN_PLAY", "PAUSED", "FINISHED", "POSTPONED", "CANCELLED", "SUSPENDED"):
             continue
+
+        # World Cup knockout fixtures appear on the schedule before the
+        # qualifying teams are known. The API returns them with
+        # homeTeam.name / awayTeam.name == null. Skip these — they'll
+        # be picked up on a later sync once the bracket fills in.
+        home_team_name = (match.get("homeTeam") or {}).get("name")
+        away_team_name = (match.get("awayTeam") or {}).get("name")
+        if not home_team_name or not away_team_name:
+            continue
+
         utc_date_str = match["utcDate"]
         utc_dt = datetime.fromisoformat(utc_date_str.replace("Z", "+00:00"))
 
@@ -433,8 +443,8 @@ def fetch_fixtures_from_api(competition_code: str = "SA") -> list[dict]:
         fixtures.append({
             "match_id": str(match["id"]),
             "match_date": utc_dt,
-            "home_team": match["homeTeam"]["name"],
-            "away_team": match["awayTeam"]["name"],
+            "home_team": home_team_name,
+            "away_team": away_team_name,
             "season": season_str,
             "matchday": matchday_label,
             "status": status,
@@ -514,6 +524,13 @@ def update_fixtures() -> None:
     fixtures_to_use.extend(fetch_fixtures_from_api("WC"))
 
     for fi in fixtures_to_use:
+        # Defensive guard: a fixture dict with missing teams or match_id
+        # is unusable. fetch_fixtures_from_api already skips these for the
+        # WC knockout-placeholder case, but this protects against any
+        # future caller producing a malformed row.
+        if not fi.get('match_id') or not fi.get('home_team') or not fi.get('away_team'):
+            continue
+
         existing = Fixture.query.filter_by(match_id=fi['match_id']).first()
         if existing:
             updated = False
