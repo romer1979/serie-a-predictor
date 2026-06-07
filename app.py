@@ -93,6 +93,30 @@ FIXTURE_STATUSES = (
 EXCLUDED_FROM_CURRENT = ("POSTPONED", "CANCELLED", "SUSPENDED")
 
 # -----------------------------------------------------------------------------
+# Competitions
+# -----------------------------------------------------------------------------
+# Each competition is a distinct tournament with its own fixtures, theme, and
+# leaderboard. Predictions stay scoped to a competition implicitly via the
+# fixture they reference.
+COMPETITIONS = {
+    "SA": {
+        "code": "SA",
+        "display_name": "Serie A",
+        "api_code": "SA",          # football-data.org competition code
+        "theme_class": "theme-gazzetta",
+        "url_prefix": "",          # Serie A is the default at "/"
+    },
+    "WC": {
+        "code": "WC",
+        "display_name": "World Cup 2026",
+        "api_code": "WC",
+        "theme_class": "theme-worldcup",
+        "url_prefix": "/world-cup",
+    },
+}
+DEFAULT_COMPETITION = "SA"
+
+# -----------------------------------------------------------------------------
 # Jinja filters
 # -----------------------------------------------------------------------------
 
@@ -168,6 +192,11 @@ class Fixture(db.Model):
     away_team = db.Column(db.String, nullable=False)
     season = db.Column(db.String, nullable=False)
     matchday = db.Column(db.String, nullable=True)
+    # Which competition this fixture belongs to (e.g. 'SA' for Serie A, 'WC'
+    # for World Cup 2026). Keyed against the COMPETITIONS dict above.
+    competition_code = db.Column(
+        db.String, nullable=False, default="SA", server_default="SA", index=True,
+    )
     status = db.Column(db.String, default="SCHEDULED")  # SCHEDULED/TIMED/IN_PLAY/PAUSED/FINISHED/POSTPONED/CANCELLED/SUSPENDED
     home_score = db.Column(db.Integer, nullable=True)
     away_score = db.Column(db.Integer, nullable=True)
@@ -326,6 +355,7 @@ def fetch_fixtures_from_api() -> list[dict]:
             "status": status,
             "home_score": home_ft if home_ft is not None else None,
             "away_score": away_ft if away_ft is not None else None,
+            "competition_code": "SA",
         })
     return fixtures
 
@@ -369,6 +399,7 @@ def fetch_fixtures_from_fallback() -> list[dict]:
             "status": status,
             "home_score": home_score,
             "away_score": away_score,
+            "competition_code": "SA",
         })
     return fixtures
 
@@ -499,6 +530,7 @@ def update_fixtures() -> None:
                     status=status,
                     home_score=home_sc,
                     away_score=away_sc,
+                    competition_code=fi.get('competition_code', 'SA'),
                     scores_manually_edited=False,
                     status_manually_edited=False,
                 ))
@@ -1610,6 +1642,15 @@ with app.app_context():
                 if 'admin_notes' not in columns:
                     conn.execute(text('ALTER TABLE fixtures ADD COLUMN admin_notes VARCHAR'))
                     print("[MIGRATION] Added admin_notes column")
+
+                # Add competition_code if missing (multi-competition support)
+                # Existing rows are backfilled to 'SA' (Serie A) via the DEFAULT.
+                if 'competition_code' not in columns:
+                    conn.execute(text(
+                        "ALTER TABLE fixtures ADD COLUMN competition_code VARCHAR "
+                        "NOT NULL DEFAULT 'SA'"
+                    ))
+                    print("[MIGRATION] Added competition_code column (defaulted to 'SA')")
 
                 conn.commit()
 
