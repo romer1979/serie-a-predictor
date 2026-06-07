@@ -21,9 +21,9 @@
     <select id="hist-comp" name="competition" class="form-select"
             onchange="window.location.href = this.options[this.selectedIndex].dataset.url">
       <option value="SA" data-url="{{ url_for('history') }}"
-              {% if current_competition.code == 'SA' %}selected{% endif %}>Serie A</option>
+              {% if current_competition.code == 'SA' %}selected{% endif %}>{{ COMPETITIONS['SA'].display_name }}</option>
       <option value="WC" data-url="{{ url_for('worldcup.history') }}"
-              {% if current_competition.code == 'WC' %}selected{% endif %}>World Cup 2026</option>
+              {% if current_competition.code == 'WC' %}selected{% endif %}>{{ COMPETITIONS['WC'].display_name }}</option>
     </select>
   </div>
   <div class="form-field">
