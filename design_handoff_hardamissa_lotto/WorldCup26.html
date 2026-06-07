@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>World Cup 2026 — Hardamissa Lotto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800&family=Bebas+Neue&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   WORLD CUP 26 THEME — design mock
+   Palette inspired by the official FIFA WC 26 brand kit:
+   magenta-crimson primary, deep navy ground, metallic gold,
+   royal blue accent, cream text.
+   ========================================================= */
+:root{
+  --wc-magenta:    #E40046;   /* hero primary */
+  --wc-magenta-hi: #FF1E60;   /* hover/glow */
+  --wc-navy:       #0B1947;   /* base background */
+  --wc-navy-2:     #131F54;   /* card surface */
+  --wc-navy-3:     #1B2A6A;   /* hover surface */
+  --wc-gold:       #D4A24C;   /* trophy gold */
+  --wc-blue:       #2A4FBE;   /* secondary accent */
+  --wc-cream:      #FAF6EC;   /* text on dark */
+  --wc-cream-dim:  #C9C2B0;   /* muted text */
+  --wc-line:       rgba(250,246,236,.12);
+  --radius:        12px;
+  --radius-sm:     8px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:'Inter',system-ui,sans-serif;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(228,0,70,.35), transparent 60%),
+    radial-gradient(900px 500px at 10% 110%, rgba(42,79,190,.30), transparent 60%),
+    var(--wc-navy);
+  color:var(--wc-cream);
+  min-height:100vh;
+}
+
+/* ----- nav ----- */
+.site-nav{
+  border-bottom:1px solid var(--wc-line);
+  background:rgba(11,25,71,.7);
+  backdrop-filter:blur(8px);
+  position:sticky;top:0;z-index:20;
+}
+.nav-inner{
+  max-width:1200px;margin:0 auto;padding:16px 24px;
+  display:flex;align-items:center;gap:28px;
+}
+.brand{display:flex;align-items:center;gap:12px;color:var(--wc-cream);text-decoration:none}
+.brand-mark{
+  width:42px;height:42px;border-radius:50%;
+  display:grid;place-items:center;
+  font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:.5px;
+  background:linear-gradient(135deg,var(--wc-magenta) 0%,var(--wc-magenta-hi) 100%);
+  color:#fff;
+  box-shadow:0 4px 14px rgba(228,0,70,.45);
+}
+.brand-name{font-family:'Archivo',sans-serif;font-weight:800;font-size:17px;letter-spacing:.2px}
+.brand-sub{font-size:11px;color:var(--wc-cream-dim);letter-spacing:.6px;text-transform:uppercase;margin-top:-2px}
+.nav-links{display:flex;gap:4px;list-style:none;margin:0 0 0 auto;padding:0}
+.nav-links a{
+  display:inline-block;padding:9px 14px;border-radius:999px;
+  text-decoration:none;color:var(--wc-cream-dim);
+  font-weight:600;font-size:14px;letter-spacing:.2px;
+  transition:.15s ease;
+}
+.nav-links a:hover{color:var(--wc-cream);background:rgba(250,246,236,.06)}
+.nav-links a.active{
+  color:#fff;
+  background:linear-gradient(135deg,var(--wc-magenta),var(--wc-magenta-hi));
+  box-shadow:0 6px 18px rgba(228,0,70,.4);
+}
+
+/* ----- hero band ----- */
+.hero{
+  max-width:1200px;margin:32px auto 22px;padding:0 24px;
+}
+.hero-strip{
+  position:relative;
+  border-radius:var(--radius);
+  overflow:hidden;
+  padding:36px 32px;
+  background:
+    linear-gradient(115deg, var(--wc-navy-2) 0%, var(--wc-navy-3) 60%, var(--wc-blue) 100%);
+  border:1px solid var(--wc-line);
+}
+/* faux host-flag stripes ribbon */
+.hero-strip::before{
+  content:"";
+  position:absolute;inset:0 0 0 auto;width:55%;
+  background:
+    linear-gradient(115deg,
+      transparent 0%, transparent 20%,
+      rgba(228,0,70,.18) 20%, rgba(228,0,70,.18) 33%,
+      rgba(255,255,255,.04) 33%, rgba(255,255,255,.04) 46%,
+      rgba(0,165,80,.14) 46%, rgba(0,165,80,.14) 59%,
+      transparent 59%, transparent 100%);
+  mask-image:linear-gradient(to right,transparent 0%, #000 30%, #000 100%);
+}
+.hero-row{display:flex;align-items:center;gap:22px;flex-wrap:wrap;position:relative}
+.hero-26{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:78px;line-height:.85;
+  background:linear-gradient(180deg,#fff 0%,var(--wc-gold) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  letter-spacing:1px;
+}
+.hero-text h1{
+  margin:0;font-family:'Archivo',sans-serif;font-weight:900;
+  font-size:30px;line-height:1.1;text-transform:uppercase;letter-spacing:.5px;
+}
+.hero-text .sub{margin-top:4px;color:var(--wc-cream-dim);font-size:14px;letter-spacing:.3px}
+.hero-spacer{flex:1}
+.hero-cta{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:12px 18px;border-radius:999px;border:none;cursor:pointer;
+  font-family:'Inter',sans-serif;font-weight:700;font-size:14px;
+  background:linear-gradient(135deg,var(--wc-magenta),var(--wc-magenta-hi));
+  color:#fff;letter-spacing:.3px;
+  box-shadow:0 8px 22px rgba(228,0,70,.45);
+}
+.hero-cta:hover{transform:translateY(-1px)}
+
+/* ----- page head ----- */
+.page-head{
+  max-width:1200px;margin:0 auto;padding:0 24px;
+  display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px;
+}
+.h-page{
+  margin:0;font-family:'Archivo',sans-serif;font-weight:800;
+  font-size:22px;text-transform:uppercase;letter-spacing:.5px;
+}
+.h-page .stage-pill{
+  display:inline-block;margin-left:10px;
+  padding:4px 10px;border-radius:999px;
+  font-size:11px;letter-spacing:.6px;
+  background:rgba(212,162,76,.15);color:var(--wc-gold);
+  border:1px solid rgba(212,162,76,.4);
+  vertical-align:middle;
+}
+
+/* ----- fixtures table card ----- */
+.container{max-width:1200px;margin:0 auto;padding:0 24px 60px}
+.table-card{
+  background:var(--wc-navy-2);
+  border:1px solid var(--wc-line);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+.table-wrap{overflow-x:auto}
+table.data{width:100%;border-collapse:separate;border-spacing:0;font-size:14px}
+table.data thead th{
+  text-align:left;
+  font-family:'Archivo',sans-serif;font-weight:700;font-size:11px;
+  letter-spacing:.8px;text-transform:uppercase;
+  color:var(--wc-cream-dim);
+  padding:14px 16px;border-bottom:1px solid var(--wc-line);
+  background:rgba(11,25,71,.4);
+}
+table.data tbody td{
+  padding:18px 16px;border-bottom:1px solid var(--wc-line);
+  vertical-align:middle;
+}
+table.data tbody tr:last-child td{border-bottom:none}
+.text-center{text-align:center}
+.text-end{text-align:right}
+
+/* match cell */
+.kickoff-date{font-weight:600;font-size:13px}
+.kickoff-time{font-size:12px;color:var(--wc-cream-dim);margin-top:2px}
+.match-title{font-family:'Archivo',sans-serif;font-weight:700;font-size:15px}
+.match-title .flag{font-size:18px;margin-right:6px}
+.muted{color:var(--wc-cream-dim);font-weight:500;margin:0 6px}
+.match-meta{font-size:11px;color:var(--wc-cream-dim);margin-top:4px;letter-spacing:.3px;text-transform:uppercase}
+
+/* 1 X 2 picker */
+.choice{display:inline-flex;gap:6px;margin-top:8px}
+.radio{position:relative;cursor:pointer}
+.radio input{position:absolute;opacity:0;inset:0}
+.radio span{
+  display:inline-grid;place-items:center;
+  width:38px;height:32px;border-radius:8px;
+  background:rgba(250,246,236,.06);
+  border:1px solid var(--wc-line);
+  font-family:'Archivo',sans-serif;font-weight:800;font-size:13px;
+  color:var(--wc-cream-dim);
+  transition:.15s ease;
+}
+.radio:hover span{color:var(--wc-cream);border-color:rgba(250,246,236,.3)}
+.radio input:checked + span{
+  background:linear-gradient(135deg,var(--wc-magenta),var(--wc-magenta-hi));
+  color:#fff;border-color:transparent;
+  box-shadow:0 4px 14px rgba(228,0,70,.4);
+}
+
+/* result + status */
+.result-score{font-family:'Archivo',sans-serif;font-weight:800;font-size:16px;color:var(--wc-cream)}
+.pill{
+  display:inline-block;padding:4px 10px;border-radius:999px;
+  font-size:11px;font-weight:700;letter-spacing:.6px;
+}
+.pill.live{background:rgba(228,0,70,.18);color:var(--wc-magenta-hi);border:1px solid rgba(228,0,70,.4)}
+.pill.live::before{content:"● ";color:var(--wc-magenta-hi)}
+.pill.finished{background:rgba(212,162,76,.15);color:var(--wc-gold);border:1px solid rgba(212,162,76,.4)}
+.pill.scheduled{background:rgba(42,79,190,.18);color:#94B0FF;border:1px solid rgba(42,79,190,.5)}
+
+/* picks chips */
+.predictions-strip{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.mb-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:5px 9px;border-radius:999px;
+  background:rgba(250,246,236,.06);border:1px solid var(--wc-line);
+  font-size:12px;
+}
+.mb-chip.pick-correct{
+  background:rgba(212,162,76,.18);border-color:rgba(212,162,76,.5);color:var(--wc-gold);
+}
+.mb-name{font-weight:600;color:var(--wc-cream-dim)}
+.mb-sep{color:var(--wc-cream-dim)}
+.mb-pick{font-family:'Archivo',sans-serif;font-weight:800}
+
+/* save button */
+.sticky-save{
+  position:sticky;bottom:16px;display:flex;justify-content:flex-end;margin-top:16px;
+}
+.btn-primary{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:13px 22px;border-radius:999px;border:none;cursor:pointer;
+  font-family:'Inter',sans-serif;font-weight:700;font-size:14px;
+  background:linear-gradient(135deg,var(--wc-magenta),var(--wc-magenta-hi));
+  color:#fff;
+  box-shadow:0 10px 28px rgba(228,0,70,.5);
+}
+
+footer{
+  max-width:1200px;margin:0 auto;padding:24px;text-align:center;
+  color:var(--wc-cream-dim);font-size:12px;letter-spacing:.3px;
+}
+footer .dot{margin:0 8px;color:var(--wc-gold)}
+</style>
+</head>
+<body>
+
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="brand" href="#">
+      <span class="brand-mark">26</span>
+      <span>
+        <span class="brand-name">Hardamissa Lotto</span><br>
+        <span class="brand-sub">World Cup Edition</span>
+      </span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#">Serie A</a></li>
+      <li><a href="#" class="active">World Cup 2026</a></li>
+      <li><a href="#">Leaderboard</a></li>
+      <li><a href="#">History</a></li>
+      <li><a href="#">Logout</a></li>
+    </ul>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-strip">
+    <div class="hero-row">
+      <div class="hero-26">26</div>
+      <div class="hero-text">
+        <h1>FIFA World Cup 2026</h1>
+        <div class="sub">United States · Canada · Mexico &nbsp;·&nbsp; Group Stage · Matchday 2</div>
+      </div>
+      <div class="hero-spacer"></div>
+      <button class="hero-cta">💾 Save All Predictions</button>
+    </div>
+  </div>
+</section>
+
+<div class="page-head">
+  <h1 class="h-page">Group Stage <span class="stage-pill">Matchday 2 of 3</span></h1>
+</div>
+
+<main class="container">
+
+  <div class="table-card">
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th style="width:110px">Kickoff</th>
+            <th>Match</th>
+            <th class="text-center">Rabie</th>
+            <th class="text-center">Tarek</th>
+            <th class="text-center">Sami</th>
+            <th class="text-end" style="width:90px">Result</th>
+            <th class="text-center" style="width:90px">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- finished row -->
+          <tr>
+            <td>
+              <div class="kickoff-date">Sat, Jun 13</div>
+              <div class="kickoff-time">20:00</div>
+            </td>
+            <td>
+              <div class="match-title">
+                <span class="flag">🇲🇽</span>Mexico
+                <span class="muted">vs</span>
+                <span class="flag">🇵🇱</span>Poland
+              </div>
+              <div class="match-meta">Group A · Estadio Azteca, CDMX</div>
+              <div class="choice">
+                <label class="radio"><input type="radio" name="m1"><span>1</span></label>
+                <label class="radio"><input type="radio" name="m1" checked><span>X</span></label>
+                <label class="radio"><input type="radio" name="m1"><span>2</span></label>
+              </div>
+            </td>
+            <td class="text-center"><span class="mb-pick">X</span></td>
+            <td class="text-center"><span class="mb-pick">1</span></td>
+            <td class="text-center"><span class="mb-pick">X</span></td>
+            <td class="text-end"><span class="result-score">0–0</span></td>
+            <td class="text-center"><span class="pill finished">FT</span></td>
+          </tr>
+
+          <!-- live row -->
+          <tr>
+            <td>
+              <div class="kickoff-date">Sun, Jun 14</div>
+              <div class="kickoff-time">15:00</div>
+            </td>
+            <td>
+              <div class="match-title">
+                <span class="flag">🇺🇸</span>USA
+                <span class="muted">vs</span>
+                <span class="flag">🇪🇨</span>Ecuador
+              </div>
+              <div class="match-meta">Group D · MetLife Stadium, NJ</div>
+              <div class="choice">
+                <label class="radio"><input type="radio" name="m2" checked><span>1</span></label>
+                <label class="radio"><input type="radio" name="m2"><span>X</span></label>
+                <label class="radio"><input type="radio" name="m2"><span>2</span></label>
+              </div>
+            </td>
+            <td class="text-center"><span class="mb-pick">1</span></td>
+            <td class="text-center"><span class="mb-pick">1</span></td>
+            <td class="text-center"><span class="mb-pick">X</span></td>
+            <td class="text-end"><span class="result-score">1–0</span></td>
+            <td class="text-center"><span class="pill live">LIVE</span></td>
+          </tr>
+
+          <!-- scheduled row -->
+          <tr>
+            <td>
+              <div class="kickoff-date">Sun, Jun 14</div>
+              <div class="kickoff-time">18:00</div>
+            </td>
+            <td>
+              <div class="match-title">
+                <span class="flag">🇧🇷</span>Brazil
+                <span class="muted">vs</span>
+                <span class="flag">🇨🇲</span>Cameroon
+              </div>
+              <div class="match-meta">Group F · BMO Field, Toronto</div>
+              <div class="choice">
+                <label class="radio"><input type="radio" name="m3" checked><span>1</span></label>
+                <label class="radio"><input type="radio" name="m3"><span>X</span></label>
+                <label class="radio"><input type="radio" name="m3"><span>2</span></label>
+              </div>
+            </td>
+            <td class="text-center"><span class="mb-name" style="font-style:italic">hidden</span></td>
+            <td class="text-center"><span class="mb-name" style="font-style:italic">hidden</span></td>
+            <td class="text-center"><span class="mb-name" style="font-style:italic">hidden</span></td>
+            <td class="text-end"><span style="color:var(--wc-cream-dim)">—</span></td>
+            <td class="text-center"><span class="pill scheduled">SCHED</span></td>
+          </tr>
+
+          <!-- scheduled row 2 -->
+          <tr>
+            <td>
+              <div class="kickoff-date">Mon, Jun 15</div>
+              <div class="kickoff-time">21:00</div>
+            </td>
+            <td>
+              <div class="match-title">
+                <span class="flag">🇦🇷</span>Argentina
+                <span class="muted">vs</span>
+                <span class="flag">🇩🇪</span>Germany
+              </div>
+              <div class="match-meta">Group H · SoFi Stadium, Los Angeles</div>
+              <div class="choice">
+                <label class="radio"><input type="radio" name="m4"><span>1</span></label>
+                <label class="radio"><input type="radio" name="m4"><span>X</span></label>
+                <label class="radio"><input type="radio" name="m4"><span>2</span></label>
+              </div>
+            </td>
+            <td class="text-center"><span class="mb-name" style="font-style:italic">hidden</span></td>
+            <td class="text-center"><span class="mb-name" style="font-style:italic">hidden</span></td>
+            <td class="text-center"><span class="mb-name" style="font-style:italic">hidden</span></td>
+            <td class="text-end"><span style="color:var(--wc-cream-dim)">—</span></td>
+            <td class="text-center"><span class="pill scheduled">SCHED</span></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="sticky-save">
+    <button class="btn-primary">💾 Save All Predictions (2)</button>
+  </div>
+
+  <!-- Below-card chips: example of mobile-style picks reveal -->
+  <div style="margin-top:24px">
+    <div class="match-meta" style="margin-bottom:8px">Picks revealed for Mexico vs Poland</div>
+    <div class="predictions-strip">
+      <span class="mb-chip pick-correct"><span class="mb-name">Rabie</span><span class="mb-sep">·</span><span class="mb-pick">X</span></span>
+      <span class="mb-chip"><span class="mb-name">Tarek</span><span class="mb-sep">·</span><span class="mb-pick">1</span></span>
+      <span class="mb-chip pick-correct"><span class="mb-name">Sami</span><span class="mb-sep">·</span><span class="mb-pick">X</span></span>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Times shown in your local time <span class="dot">●</span> Data: football-data.org <span class="dot">●</span> Hardamissa Lotto · World Cup Edition
+</footer>
+
+</body>
+</html>
