@@ -12,6 +12,14 @@
 
 <form method="get" action="{{ url_for('admin_results') }}" class="filter-row">
   <div class="form-field">
+    <label class="form-label" for="ar-comp">Competition</label>
+    <select id="ar-comp" name="competition" class="form-select" onchange="this.form.submit()">
+      {% for code, comp in competitions.items() %}
+        <option value="{{ code }}" {% if code == competition_code %}selected{% endif %}>{{ comp.display_name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-field">
     <label class="form-label" for="ar-season">Season</label>
     <select id="ar-season" name="season" class="form-select" onchange="this.form.submit()">
       {% for s in seasons %}
@@ -23,7 +31,7 @@
     <label class="form-label" for="ar-md">Matchday</label>
     <select id="ar-md" name="matchday" class="form-select" onchange="this.form.submit()">
       {% for md in matchdays %}
-        <option value="{{ md }}" {% if md == matchday %}selected{% endif %}>MD {{ md }}</option>
+        <option value="{{ md }}" {% if md == matchday %}selected{% endif %}>{% if competition_code == 'SA' %}MD {{ md }}{% else %}{{ md }}{% endif %}</option>
       {% endfor %}
     </select>
   </div>

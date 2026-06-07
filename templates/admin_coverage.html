@@ -9,6 +9,14 @@
   </div>
   <form method="get" action="{{ url_for('admin_coverage') }}" class="hstack">
     <div class="form-field">
+      <label class="form-label" for="cov-comp">Competition</label>
+      <select id="cov-comp" name="competition" class="form-select" onchange="this.form.submit()" style="min-width: 160px;">
+        {% for code, comp in competitions.items() %}
+          <option value="{{ code }}" {% if code == competition_code %}selected{% endif %}>{{ comp.display_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-field">
       <label class="form-label" for="cov-season">Season</label>
       <select id="cov-season" name="season" class="form-select" onchange="this.form.submit()" style="min-width: 140px;">
         {% for s in seasons %}
@@ -20,7 +28,7 @@
       <label class="form-label" for="cov-md">Matchday</label>
       <select id="cov-md" name="matchday" class="form-select" onchange="this.form.submit()" style="min-width: 110px;">
         {% for m in matchdays %}
-          <option value="{{ m }}" {% if m == matchday %}selected{% endif %}>MD {{ m }}</option>
+          <option value="{{ m }}" {% if m == matchday %}selected{% endif %}>{% if competition_code == 'SA' %}MD {{ m }}{% else %}{{ m }}{% endif %}</option>
         {% endfor %}
       </select>
     </div>

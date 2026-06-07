@@ -862,11 +862,15 @@ def upcoming_fixtures(exclude_postponed: bool = True) -> list[Fixture]:
     return sorted(merged.values(), key=lambda f: f.match_date)
 
 
-def get_postponed_fixtures(season: str = None) -> list[Fixture]:
+def get_postponed_fixtures(season: str = None, competition_code: str = "SA") -> list[Fixture]:
     """
-    Get all postponed/cancelled/suspended fixtures, optionally filtered by season.
+    Get all postponed/cancelled/suspended fixtures for one competition,
+    optionally filtered by season.
     """
-    query = Fixture.query.filter(Fixture.status.in_(EXCLUDED_FROM_CURRENT))
+    query = Fixture.query.filter(
+        Fixture.status.in_(EXCLUDED_FROM_CURRENT),
+        Fixture.competition_code == competition_code,
+    )
     if season:
         query = query.filter(Fixture.season == season)
     return query.order_by(Fixture.match_date.asc()).all()
@@ -1242,10 +1246,7 @@ def _view_postponed(competition_code: str):
     season = request.args.get('season') or current_season_from_db(competition_code)
     seasons = seasons_available(competition_code)
 
-    postponed = get_postponed_fixtures(season) if season else []
-    # get_postponed_fixtures predates multi-competition support — filter the
-    # result here so a WC view never shows Serie A rows and vice versa.
-    postponed = [f for f in postponed if f.competition_code == competition_code]
+    postponed = get_postponed_fixtures(season, competition_code) if season else []
 
     return render_template(
         'postponed.html',
@@ -1712,17 +1713,38 @@ def admin_refresh():
 def admin_results():
     if not current_user.is_admin:
         abort(403)
-    seasons = seasons_available()
+
+    # Competition selector — defaults to Serie A; falls back to SA if unknown.
+    competition_code = request.args.get("competition") or "SA"
+    if competition_code not in COMPETITIONS:
+        competition_code = "SA"
+
+    seasons = seasons_available(competition_code)
     if not seasons:
-        return render_template("admin_results.html", fixtures=[], seasons=[], season=None, matchday=None, matchdays=[])
+        return render_template(
+            "admin_results.html",
+            fixtures=[],
+            seasons=[],
+            season=None,
+            matchday=None,
+            matchdays=[],
+            competition_code=competition_code,
+            competitions=COMPETITIONS,
+        )
+
     season = request.args.get("season") or seasons[-1]
-    matchdays = matchdays_for(season) if season else []
+    matchdays = matchdays_for(season, competition_code) if season else []
     matchday = request.args.get("matchday") or (matchdays[0] if matchdays else None)
+
     fixtures = []
     if season and matchday:
         fixtures = (
             Fixture.query
-            .filter_by(season=season, matchday=matchday)
+            .filter_by(
+                competition_code=competition_code,
+                season=season,
+                matchday=matchday,
+            )
             .order_by(Fixture.match_date.asc())
             .all()
         )
@@ -1734,6 +1756,8 @@ def admin_results():
         matchday=matchday,
         matchdays=matchdays,
         EXCLUDED_FROM_CURRENT=EXCLUDED_FROM_CURRENT,
+        competition_code=competition_code,
+        competitions=COMPETITIONS,
     )
 
 
@@ -1808,7 +1832,12 @@ def admin_update_result(fixture_id: int):
     evaluate_predictions()
     
     flash(f"Updated: {fixture.home_team} vs {fixture.away_team}.", "success")
-    return redirect(url_for("admin_results", season=fixture.season, matchday=fixture.matchday))
+    return redirect(url_for(
+        "admin_results",
+        competition=fixture.competition_code,
+        season=fixture.season,
+        matchday=fixture.matchday,
+    ))
 
 
 @app.route("/admin/postpone/<int:fixture_id>", methods=["POST"])
@@ -1845,7 +1874,12 @@ def admin_postpone_fixture(fixture_id: int):
     db.session.commit()
     
     flash(f"Marked as POSTPONED: {fixture.home_team} vs {fixture.away_team}.", "warning")
-    return redirect(url_for("admin_results", season=fixture.season, matchday=fixture.matchday))
+    return redirect(url_for(
+        "admin_results",
+        competition=fixture.competition_code,
+        season=fixture.season,
+        matchday=fixture.matchday,
+    ))
 
 
 @app.route("/admin/unpostpone/<int:fixture_id>", methods=["POST"])
@@ -1872,7 +1906,12 @@ def admin_unpostpone_fixture(fixture_id: int):
     db.session.commit()
     
     flash(f"Restored to SCHEDULED: {fixture.home_team} vs {fixture.away_team}.", "success")
-    return redirect(url_for("admin_results", season=fixture.season, matchday=fixture.matchday))
+    return redirect(url_for(
+        "admin_results",
+        competition=fixture.competition_code,
+        season=fixture.season,
+        matchday=fixture.matchday,
+    ))
 
 
 @app.route("/history/refresh", methods=["POST"])
@@ -1885,10 +1924,14 @@ def history_refresh():
     return redirect(url_for("history", season=season, matchday=matchday))
 
 
-def prediction_coverage(season: str, matchday: str):
+def prediction_coverage(season: str, matchday: str, competition_code: str = "SA"):
     """Return coverage statistics for each fixture in a round."""
     fixtures = (Fixture.query
-                .filter_by(season=season, matchday=matchday)
+                .filter_by(
+                    competition_code=competition_code,
+                    season=season,
+                    matchday=matchday,
+                )
                 .order_by(Fixture.match_date.asc())
                 .all())
     if not fixtures:
@@ -1931,20 +1974,25 @@ def prediction_coverage(season: str, matchday: str):
 def admin_coverage():
     if not current_user.is_admin:
         abort(403)
-    seasons = seasons_available()
-    current_season = current_season_from_db() or (seasons[-1] if seasons else None)
+
+    competition_code = request.args.get("competition") or "SA"
+    if competition_code not in COMPETITIONS:
+        competition_code = "SA"
+
+    seasons = seasons_available(competition_code)
+    current_season = current_season_from_db(competition_code) or (seasons[-1] if seasons else None)
     season = request.args.get("season") or current_season
     md_param = request.args.get("matchday")
     if md_param:
         md = md_param
     else:
         if season:
-            md = current_home_matchday(season) or (matchdays_for(season) or [None])[-1]
+            md = current_home_matchday(season, competition_code) or (matchdays_for(season, competition_code) or [None])[-1]
         else:
             md = None
 
-    matchdays = matchdays_for(season) if season else []
-    rows = prediction_coverage(season, md) if season and md else []
+    matchdays = matchdays_for(season, competition_code) if season else []
+    rows = prediction_coverage(season, md, competition_code) if season and md else []
 
     return render_template(
         "admin_coverage.html",
@@ -1953,6 +2001,8 @@ def admin_coverage():
         matchdays=matchdays,
         matchday=md,
         rows=rows,
+        competition_code=competition_code,
+        competitions=COMPETITIONS,
     )
 
 
