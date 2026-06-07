@@ -1167,6 +1167,37 @@ def season_user_points(season: str, competition_code: str = "SA"):
     return sorted(rows, key=lambda x: (-x["points"], x["username"].lower()))
 
 
+def overall_user_points(competition_code: str = "SA"):
+    """Return list of dicts {username: points} summed across all seasons
+    of the given competition. Used for the leaderboard's "Overall" scope —
+    intentionally excludes admin bonus points so Serie A adjustments don't
+    leak into the World Cup tally and vice versa.
+    """
+    predictions = (
+        db.session.query(Prediction, Fixture, User)
+        .join(Fixture, Fixture.id == Prediction.fixture_id)
+        .join(User, User.id == Prediction.user_id)
+        .filter(Fixture.competition_code == competition_code)
+        .all()
+    )
+    user_points: dict[str, int] = {}
+    for pred, fix, user in predictions:
+        user_points.setdefault(user.username, 0)
+        if fix.home_score is None or fix.away_score is None:
+            continue
+        outcome = fix.outcome_code()
+        if outcome and pred.selection == outcome:
+            user_points[user.username] += 1
+
+    # Include users who haven't predicted anything yet so the board lists
+    # everyone (with 0 points).
+    for u in User.query.all():
+        user_points.setdefault(u.username, 0)
+
+    rows = [{"username": uname, "points": pts} for uname, pts in user_points.items()]
+    return sorted(rows, key=lambda x: (-x["points"], x["username"].lower()))
+
+
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
@@ -1259,6 +1290,15 @@ def _view_postponed(competition_code: str):
 @app.route('/')
 @login_required
 def index():
+    """Default landing page: send users straight to the World Cup tab."""
+    return redirect(url_for('worldcup.index'))
+
+
+@app.route('/seriea/')
+@login_required
+def seriea_index():
+    """Stable URL for the Serie A fixtures page (decoupled from '/' since
+    the root now redirects to the World Cup tab)."""
     return _view_fixtures('SA')
 
 
@@ -1278,7 +1318,7 @@ def predict(fixture_id: int):
 
     # Redirect back to the fixture's own competition tab.
     return_endpoint = (
-        'worldcup.index' if fixture.competition_code == 'WC' else 'index'
+        'worldcup.index' if fixture.competition_code == 'WC' else 'seriea_index'
     )
 
     if not fixture.is_open_for_prediction():
@@ -1330,7 +1370,7 @@ def _save_all_predictions_view(competition_code: str, redirect_endpoint: str):
 @app.route("/save_all_predictions", methods=["POST"])
 @login_required
 def save_all_predictions():
-    return _save_all_predictions_view('SA', 'index')
+    return _save_all_predictions_view('SA', 'seriea_index')
 
 
 def _view_leaderboard(competition_code: str, redirect_endpoint: str):
@@ -1380,8 +1420,11 @@ def _view_leaderboard(competition_code: str, redirect_endpoint: str):
             matchday=None
         )
 
-    users = User.query.all()
-    users_sorted = sorted(users, key=lambda u: (-u.points, u.username.lower()))
+    # Overall scope: sum points across all seasons of this competition only.
+    # This intentionally diverges from the original implementation which used
+    # User.points (a mix of all competitions + admin bonus). Each competition
+    # gets its own clean tally now.
+    users_sorted = overall_user_points(competition_code)
     return render_template(
         "leaderboard.html",
         users=users_sorted,
@@ -1521,7 +1564,7 @@ def _inject_competition_helpers():
     """
     endpoint_map = {
         'SA': {
-            'fixtures':    'index',
+            'fixtures':    'seriea_index',
             'postponed':   'postponed_fixtures_view',
             'leaderboard': 'leaderboard',
             'history':     'history',

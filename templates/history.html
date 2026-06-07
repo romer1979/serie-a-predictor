@@ -14,6 +14,18 @@
 </div>
 
 <form method="get" class="filter-row">
+  {# Competition picker — switching navigates to the other endpoint with no
+     season/matchday params so the new tab picks its own defaults. #}
+  <div class="form-field">
+    <label for="hist-comp" class="form-label">Competition</label>
+    <select id="hist-comp" name="competition" class="form-select"
+            onchange="window.location.href = this.options[this.selectedIndex].dataset.url">
+      <option value="SA" data-url="{{ url_for('history') }}"
+              {% if current_competition.code == 'SA' %}selected{% endif %}>Serie A</option>
+      <option value="WC" data-url="{{ url_for('worldcup.history') }}"
+              {% if current_competition.code == 'WC' %}selected{% endif %}>World Cup 2026</option>
+    </select>
+  </div>
   <div class="form-field">
     <label for="season" class="form-label">Season</label>
     <select id="season" name="season" class="form-select" onchange="this.form.submit()">
