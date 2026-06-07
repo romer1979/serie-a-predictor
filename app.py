@@ -1775,9 +1775,17 @@ def admin_results():
             competitions=COMPETITIONS,
         )
 
-    season = request.args.get("season") or seasons[-1]
+    # Validate season/matchday against this competition. When the user flips
+    # the Competition dropdown, the auto-submit carries the previous Serie A
+    # season ('2025-26') and matchday ('36') into the URL — those don't exist
+    # for World Cup, so without this snap the matchday list comes back empty
+    # and the table shows no fixtures.
+    season_param = request.args.get("season")
+    season = season_param if season_param in seasons else seasons[-1]
+
     matchdays = matchdays_for(season, competition_code) if season else []
-    matchday = request.args.get("matchday") or (matchdays[0] if matchdays else None)
+    matchday_param = request.args.get("matchday")
+    matchday = matchday_param if matchday_param in matchdays else (matchdays[0] if matchdays else None)
 
     fixtures = []
     if season and matchday:
@@ -2024,17 +2032,21 @@ def admin_coverage():
 
     seasons = seasons_available(competition_code)
     current_season = current_season_from_db(competition_code) or (seasons[-1] if seasons else None)
-    season = request.args.get("season") or current_season
-    md_param = request.args.get("matchday")
-    if md_param:
-        md = md_param
-    else:
-        if season:
-            md = current_home_matchday(season, competition_code) or (matchdays_for(season, competition_code) or [None])[-1]
-        else:
-            md = None
+
+    # Snap stale params from a prior Serie A selection to the current
+    # competition's defaults (see admin_results for the rationale).
+    season_param = request.args.get("season")
+    season = season_param if season_param in seasons else current_season
 
     matchdays = matchdays_for(season, competition_code) if season else []
+    md_param = request.args.get("matchday")
+    if md_param and md_param in matchdays:
+        md = md_param
+    elif season:
+        md = current_home_matchday(season, competition_code) or (matchdays[-1] if matchdays else None)
+    else:
+        md = None
+
     rows = prediction_coverage(season, md, competition_code) if season and md else []
 
     return render_template(
