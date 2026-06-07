@@ -2,13 +2,13 @@
 {% block title %}{{ season or 'Season' }} — Matchday {{ matchday or '—' }} · Hardamissa Lotto{% endblock %}
 
 {% block content %}
-<form id="save-all" action="{{ url_for('save_all_predictions') }}" method="post">
+<form id="save-all" action="{{ url_for_comp('save_all') }}" method="post">
 
   <div class="page-head">
     <div>
-      <h1 class="h-page">{{ season or 'Season' }} — Matchday {{ matchday or '—' }}</h1>
+      <h1 class="h-page">{{ current_competition.display_name }} — {{ season or 'Season' }} — Matchday {{ matchday or '—' }}</h1>
       {% if postponed_count and postponed_count > 0 %}
-        <a href="{{ url_for('postponed_fixtures_view', season=season) }}" class="postponed-badge">
+        <a href="{{ url_for_comp('postponed', season=season) }}" class="postponed-badge">
           ⏸ {{ postponed_count }} postponed fixture{{ 's' if postponed_count > 1 else '' }}
         </a>
       {% endif %}
@@ -20,7 +20,7 @@
     <div class="table-card" style="padding: 24px; text-align: center;">
       <p style="margin: 0 0 6px;">No fixtures for this matchday.</p>
       {% if postponed_count and postponed_count > 0 %}
-        <p class="tiny">Some fixtures may have been postponed. <a href="{{ url_for('postponed_fixtures_view', season=season) }}">View postponed fixtures</a></p>
+        <p class="tiny">Some fixtures may have been postponed. <a href="{{ url_for_comp('postponed', season=season) }}">View postponed fixtures</a></p>
       {% else %}
         <p class="tiny">Check back soon!</p>
       {% endif %}

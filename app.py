@@ -19,7 +19,7 @@ from secrets import token_urlsafe
 import requests
 from sqlalchemy import func, distinct
 from flask import (
-    Flask, abort, flash, redirect, render_template, request, url_for
+    Blueprint, Flask, abort, flash, g, redirect, render_template, request, url_for
 )
 from flask_login import (
     LoginManager, UserMixin, current_user, login_required, login_user, logout_user
@@ -1057,12 +1057,11 @@ def season_user_points(season: str, competition_code: str = "SA"):
 # Routes
 # -----------------------------------------------------------------------------
 
-@app.route('/')
-@login_required
-def index():
+def _view_fixtures(competition_code: str):
+    """Render the home / fixtures page for the given competition."""
     update_fixtures_adaptive()
 
-    season = current_season_from_db()
+    season = current_season_from_db(competition_code)
     if not season:
         flash("No season data available yet.", "warning")
         return render_template(
@@ -1077,7 +1076,7 @@ def index():
             postponed_count=0,
         )
 
-    md = current_home_matchday(season)
+    md = current_home_matchday(season, competition_code)
     if not md:
         flash("No matchdays available yet.", "warning")
         return render_template(
@@ -1096,6 +1095,7 @@ def index():
     fixtures = (
         Fixture.query
         .filter(
+            Fixture.competition_code == competition_code,
             Fixture.season == season,
             Fixture.matchday == str(md),
             ~Fixture.status.in_(EXCLUDED_FROM_CURRENT)
@@ -1106,6 +1106,7 @@ def index():
 
     # Count postponed fixtures for the badge
     postponed_count = Fixture.query.filter(
+        Fixture.competition_code == competition_code,
         Fixture.season == season,
         Fixture.status.in_(EXCLUDED_FROM_CURRENT)
     ).count()
@@ -1126,15 +1127,16 @@ def index():
     )
 
 
-@app.route('/postponed')
-@login_required
-def postponed_fixtures_view():
-    """View all postponed/cancelled/suspended fixtures."""
-    season = request.args.get('season') or current_season_from_db()
-    seasons = seasons_available()
-    
-    postponed = get_postponed_fixtures(season)
-    
+def _view_postponed(competition_code: str):
+    """Render the postponed / cancelled / suspended list for the competition."""
+    season = request.args.get('season') or current_season_from_db(competition_code)
+    seasons = seasons_available(competition_code)
+
+    postponed = get_postponed_fixtures(season) if season else []
+    # get_postponed_fixtures predates multi-competition support — filter the
+    # result here so a WC view never shows Serie A rows and vice versa.
+    postponed = [f for f in postponed if f.competition_code == competition_code]
+
     return render_template(
         'postponed.html',
         fixtures=postponed,
@@ -1143,20 +1145,39 @@ def postponed_fixtures_view():
     )
 
 
+@app.route('/')
+@login_required
+def index():
+    return _view_fixtures('SA')
+
+
+@app.route('/postponed')
+@login_required
+def postponed_fixtures_view():
+    """View all postponed/cancelled/suspended fixtures."""
+    return _view_postponed('SA')
+
+
 @app.route("/predict/<int:fixture_id>", methods=["POST"])
 @login_required
 def predict(fixture_id: int):
     fixture = db.session.get(Fixture, fixture_id)
     if not fixture:
         abort(404)
+
+    # Redirect back to the fixture's own competition tab.
+    return_endpoint = (
+        'worldcup.index' if fixture.competition_code == 'WC' else 'index'
+    )
+
     if not fixture.is_open_for_prediction():
         flash("Predictions are locked for this fixture.", "warning")
-        return redirect(url_for("index"))
+        return redirect(url_for(return_endpoint))
 
     selection = request.form.get("selection")
     if selection not in ("1", "X", "2"):
         flash("Invalid prediction.", "danger")
-        return redirect(url_for("index"))
+        return redirect(url_for(return_endpoint))
 
     prediction = Prediction.query.filter_by(user_id=current_user.id, fixture_id=fixture_id).first()
     if prediction:
@@ -1168,13 +1189,16 @@ def predict(fixture_id: int):
         flash("Prediction submitted.", "success")
 
     db.session.commit()
-    return redirect(url_for("index"))
+    return redirect(url_for(return_endpoint))
 
 
-@app.route("/save_all_predictions", methods=["POST"])
-@login_required
-def save_all_predictions():
-    all_fixtures = Fixture.query.all()
+def _save_all_predictions_view(competition_code: str, redirect_endpoint: str):
+    """Persist all predictions submitted from the fixtures form and redirect.
+
+    Scopes to fixtures of the given competition so a stray hidden input from
+    a different tab can't cross-write predictions for the other tournament.
+    """
+    all_fixtures = Fixture.query.filter_by(competition_code=competition_code).all()
     for fixture in all_fixtures:
         if not fixture.is_open_for_prediction():
             continue
@@ -1189,17 +1213,21 @@ def save_all_predictions():
             pred.selection = choice
     db.session.commit()
     flash("All predictions saved!", "success")
-    return redirect(url_for("index"))
+    return redirect(url_for(redirect_endpoint))
 
 
-@app.route("/leaderboard")
+@app.route("/save_all_predictions", methods=["POST"])
 @login_required
-def leaderboard():
+def save_all_predictions():
+    return _save_all_predictions_view('SA', 'index')
+
+
+def _view_leaderboard(competition_code: str, redirect_endpoint: str):
     update_fixtures_adaptive()
     evaluate_predictions()
 
-    seasons = seasons_available()
-    current_season = current_season_from_db() or (seasons[-1] if seasons else None)
+    seasons = seasons_available(competition_code)
+    current_season = current_season_from_db(competition_code) or (seasons[-1] if seasons else None)
 
     raw_scope = request.args.get("scope")
     scope = (raw_scope or "season").lower()
@@ -1207,15 +1235,15 @@ def leaderboard():
     matchday = request.args.get("matchday")
 
     if raw_scope is None and current_season:
-        return redirect(url_for("leaderboard", scope="season", season=current_season))
+        return redirect(url_for(redirect_endpoint, scope="season", season=current_season))
 
     if scope == "week":
         if not season:
             season = current_season
-        days = matchdays_for(season)
+        days = matchdays_for(season, competition_code)
         if not matchday:
-            matchday = latest_completed_matchday(season) or (days[-1] if days else None)
-        rows = weekly_user_points(season, matchday) if matchday else []
+            matchday = latest_completed_matchday(season, competition_code) or (days[-1] if days else None)
+        rows = weekly_user_points(season, matchday, competition_code) if matchday else []
         users_sorted = [{"username": r[1], "points": int(r[2])} for r in rows]
         return render_template(
             "leaderboard.html",
@@ -1230,14 +1258,14 @@ def leaderboard():
     if scope == "season":
         if not season:
             season = current_season
-        users_sorted = season_user_points(season)
+        users_sorted = season_user_points(season, competition_code)
         return render_template(
             "leaderboard.html",
             users=users_sorted,
             scope="season",
             seasons=seasons,
             season=season,
-            matchdays=matchdays_for(season) if season else [],
+            matchdays=matchdays_for(season, competition_code) if season else [],
             matchday=None
         )
 
@@ -1249,27 +1277,25 @@ def leaderboard():
         scope="overall",
         seasons=seasons,
         season=season or current_season,
-        matchdays=matchdays_for(season or current_season) if (season or current_season) else [],
+        matchdays=matchdays_for(season or current_season, competition_code) if (season or current_season) else [],
         matchday=matchday
     )
 
 
-@app.route("/history")
-@login_required
-def history():
+def _view_history(competition_code: str):
     update_fixtures_adaptive()
 
-    seasons = seasons_available()
-    current_season = current_season_from_db() or (seasons[-1] if seasons else None)
+    seasons = seasons_available(competition_code)
+    current_season = current_season_from_db(competition_code) or (seasons[-1] if seasons else None)
 
     season = request.args.get("season") or current_season
     matchday = request.args.get("matchday") or None
 
     if season:
         if not matchday:
-            matchday = latest_completed_matchday(season)
+            matchday = latest_completed_matchday(season, competition_code)
             if not matchday:
-                days = matchdays_for(season)
+                days = matchdays_for(season, competition_code)
                 matchday = days[0] if days else None
     else:
         matchday = None
@@ -1278,7 +1304,11 @@ def history():
     if season and matchday:
         fixtures = (
             Fixture.query
-            .filter(Fixture.season == season, Fixture.matchday == str(matchday))
+            .filter(
+                Fixture.competition_code == competition_code,
+                Fixture.season == season,
+                Fixture.matchday == str(matchday),
+            )
             .order_by(Fixture.match_date.asc())
             .all()
         )
@@ -1293,9 +1323,117 @@ def history():
         show_preds_flags=show_flags,
         seasons=seasons,
         season=season,
-        matchdays=matchdays_for(season) if season else [],
+        matchdays=matchdays_for(season, competition_code) if season else [],
         matchday=matchday
     )
+
+
+@app.route("/leaderboard")
+@login_required
+def leaderboard():
+    return _view_leaderboard('SA', 'leaderboard')
+
+
+@app.route("/history")
+@login_required
+def history():
+    return _view_history('SA')
+
+
+# -----------------------------------------------------------------------------
+# World Cup 2026 — parallel route tree mounted at /world-cup
+# -----------------------------------------------------------------------------
+# Each WC route reuses the same view body as its Serie A twin, just passing
+# 'WC' for competition_code so the queries scope to World Cup fixtures.
+
+worldcup_bp = Blueprint('worldcup', __name__, url_prefix='/world-cup')
+
+
+@worldcup_bp.before_request
+def _set_wc_competition():
+    g.competition_code = 'WC'
+    g.competition = COMPETITIONS['WC']
+
+
+@worldcup_bp.route('/')
+@login_required
+def index():
+    return _view_fixtures('WC')
+
+
+@worldcup_bp.route('/postponed')
+@login_required
+def postponed_fixtures_view():
+    return _view_postponed('WC')
+
+
+@worldcup_bp.route('/leaderboard')
+@login_required
+def leaderboard():
+    return _view_leaderboard('WC', 'worldcup.leaderboard')
+
+
+@worldcup_bp.route('/history')
+@login_required
+def history():
+    return _view_history('WC')
+
+
+@worldcup_bp.route('/save_all_predictions', methods=['POST'])
+@login_required
+def save_all_predictions():
+    return _save_all_predictions_view('WC', 'worldcup.index')
+
+
+app.register_blueprint(worldcup_bp)
+
+
+# -----------------------------------------------------------------------------
+# Template / request context helpers for multi-competition routing
+# -----------------------------------------------------------------------------
+
+@app.before_request
+def _set_default_competition():
+    """Default to Serie A context unless we're inside the WC blueprint."""
+    if not request.endpoint or not request.endpoint.startswith('worldcup.'):
+        g.competition_code = 'SA'
+        g.competition = COMPETITIONS['SA']
+
+
+@app.context_processor
+def _inject_competition_helpers():
+    """Expose competition-aware helpers to all templates.
+
+    Templates call `url_for_comp(name)` instead of `url_for('index')` etc.
+    The helper resolves the right endpoint based on the current request's
+    competition context, so a single layout.html can serve both tabs.
+    """
+    endpoint_map = {
+        'SA': {
+            'fixtures':    'index',
+            'postponed':   'postponed_fixtures_view',
+            'leaderboard': 'leaderboard',
+            'history':     'history',
+            'save_all':    'save_all_predictions',
+        },
+        'WC': {
+            'fixtures':    'worldcup.index',
+            'postponed':   'worldcup.postponed_fixtures_view',
+            'leaderboard': 'worldcup.leaderboard',
+            'history':     'worldcup.history',
+            'save_all':    'worldcup.save_all_predictions',
+        },
+    }
+
+    def url_for_comp(name, code=None, **kwargs):
+        code = code or getattr(g, 'competition_code', 'SA')
+        return url_for(endpoint_map[code][name], **kwargs)
+
+    return {
+        'url_for_comp': url_for_comp,
+        'current_competition': getattr(g, 'competition', COMPETITIONS['SA']),
+        'COMPETITIONS': COMPETITIONS,
+    }
 
 
 @app.route("/login", methods=["GET", "POST"])

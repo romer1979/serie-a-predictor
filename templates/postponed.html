@@ -70,7 +70,7 @@
     <div class="empty-state-icon">✅</div>
     <h5>No postponed fixtures</h5>
     <p class="muted">All fixtures for {{ season }} are scheduled as planned.</p>
-    <a href="{{ url_for('index') }}" class="btn btn-primary" style="margin-top: 10px;">Back to Fixtures</a>
+    <a href="{{ url_for_comp('fixtures') }}" class="btn btn-primary" style="margin-top: 10px;">Back to Fixtures</a>
   </div>
 {% endif %}
 {% endblock %}

@@ -1054,3 +1054,198 @@ label.radio {
   main.wrap,
   .wrap { padding: 16px 12px 56px; }
 }
+
+/* ============================================================
+   WORLD CUP 2026 THEME — overrides scoped to body.theme-worldcup
+   Maps to design_handoff_hardamissa_lotto/WorldCup26.html
+   ============================================================ */
+body.theme-worldcup {
+  /* Palette */
+  --bg: #0B1947;
+  --paper: #131F54;
+  --ink: #FAF6EC;
+  --muted: #C9C2B0;
+  --rule: rgba(250, 246, 236, 0.12);
+  --rule-soft: rgba(250, 246, 236, 0.08);
+  --accent: #E40046;
+  --accent-ink: #ffffff;
+  --chip-bg: linear-gradient(135deg, #E40046, #FF1E60);
+  --chip-ink: #ffffff;
+  --ok: #D4A24C;          /* gold for finished — replaces green */
+  --warn: #D4A24C;
+  --danger: #FF1E60;
+  --live: #FF1E60;
+
+  /* Typography — heavier, sportier */
+  --font-display: "Archivo", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --display-weight: 800;
+  --display-tracking: 0.01em;
+
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(228, 0, 70, 0.35), transparent 60%),
+    radial-gradient(900px 500px at 10% 110%, rgba(42, 79, 190, 0.30), transparent 60%),
+    var(--bg);
+}
+
+body.theme-worldcup .site-nav {
+  background: rgba(11, 25, 71, 0.7);
+  backdrop-filter: blur(8px);
+  border-bottom-color: rgba(250, 246, 236, 0.12);
+}
+body.theme-worldcup .brand-mark.wc-mark {
+  background: linear-gradient(135deg, #E40046, #FF1E60);
+  color: #fff;
+  font-family: "Bebas Neue", sans-serif;
+  font-size: 18px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 14px rgba(228, 0, 70, 0.45);
+}
+body.theme-worldcup .brand-sub {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+body.theme-worldcup .nav-links a {
+  color: var(--muted);
+  border-radius: 999px;
+  font-weight: 600;
+}
+body.theme-worldcup .nav-links a:hover {
+  color: var(--ink);
+  background: rgba(250, 246, 236, 0.06);
+}
+body.theme-worldcup .nav-links a.active {
+  color: #fff;
+  background: linear-gradient(135deg, #E40046, #FF1E60);
+  box-shadow: 0 6px 18px rgba(228, 0, 70, 0.4);
+}
+
+/* Headings + page chrome */
+body.theme-worldcup .h-page,
+body.theme-worldcup h1,
+body.theme-worldcup h2,
+body.theme-worldcup h3 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink);
+}
+
+/* Cards + tables on dark surface */
+body.theme-worldcup .table-card,
+body.theme-worldcup .card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  color: var(--ink);
+}
+body.theme-worldcup table.data thead th {
+  background: rgba(11, 25, 71, 0.4);
+  color: var(--muted);
+  border-bottom-color: var(--rule);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  font-size: 11px;
+}
+body.theme-worldcup table.data tbody td {
+  border-bottom-color: var(--rule);
+  color: var(--ink);
+}
+body.theme-worldcup .match-title {
+  font-family: var(--font-display);
+  color: var(--ink);
+}
+body.theme-worldcup .muted,
+body.theme-worldcup .tiny,
+body.theme-worldcup .kickoff-time {
+  color: var(--muted);
+}
+
+/* 1 / X / 2 picker — selected radio glows magenta */
+body.theme-worldcup .radio span {
+  background: rgba(250, 246, 236, 0.06);
+  border: 1px solid var(--rule);
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+body.theme-worldcup .radio:hover span {
+  color: var(--ink);
+  border-color: rgba(250, 246, 236, 0.3);
+}
+body.theme-worldcup .radio input:checked + span {
+  background: linear-gradient(135deg, #E40046, #FF1E60);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 14px rgba(228, 0, 70, 0.4);
+}
+
+/* Status pills */
+body.theme-worldcup .pill {
+  font-family: var(--font-display);
+  letter-spacing: 0.6px;
+  font-size: 11px;
+}
+body.theme-worldcup .pill.live {
+  background: rgba(228, 0, 70, 0.18);
+  color: #FF1E60;
+  border: 1px solid rgba(228, 0, 70, 0.4);
+}
+body.theme-worldcup .pill.finished {
+  background: rgba(212, 162, 76, 0.15);
+  color: #D4A24C;
+  border: 1px solid rgba(212, 162, 76, 0.4);
+}
+body.theme-worldcup .pill.scheduled {
+  background: rgba(42, 79, 190, 0.18);
+  color: #94B0FF;
+  border: 1px solid rgba(42, 79, 190, 0.5);
+}
+
+/* Result score + correct-pick highlight in gold */
+body.theme-worldcup .result-score {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--ink);
+}
+body.theme-worldcup .pick-correct,
+body.theme-worldcup .desk-pick.pick-correct,
+body.theme-worldcup .mb-chip.pick-correct {
+  color: #D4A24C !important;
+  background: rgba(212, 162, 76, 0.18);
+  border-color: rgba(212, 162, 76, 0.5);
+}
+
+/* Buttons */
+body.theme-worldcup .btn-primary,
+body.theme-worldcup .save-all-predictions-btn {
+  background: linear-gradient(135deg, #E40046, #FF1E60);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  box-shadow: 0 8px 22px rgba(228, 0, 70, 0.4);
+}
+body.theme-worldcup .btn-primary:hover,
+body.theme-worldcup .save-all-predictions-btn:hover {
+  transform: translateY(-1px);
+}
+
+/* Footer */
+body.theme-worldcup .site-footer {
+  color: var(--muted);
+  border-top: 1px solid var(--rule);
+}
+
+/* Postponed badge */
+body.theme-worldcup .postponed-badge {
+  background: rgba(212, 162, 76, 0.15);
+  color: #D4A24C;
+  border: 1px solid rgba(212, 162, 76, 0.4);
+}

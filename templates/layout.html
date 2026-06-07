@@ -7,7 +7,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400;1,9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,400&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400;1,9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;0,6..72,700;1,6..72,400&family=Inter:wght@400;500;600;700;800&family=Archivo:wght@600;700;800;900&family=Bebas+Neue&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 
@@ -15,21 +15,28 @@
 
   {% block head %}{% endblock %}
 </head>
-<body class="theme-gazzetta">
+<body class="{{ current_competition.theme_class }}">
 
+  {% set in_wc = (request.endpoint or '').startswith('worldcup.') %}
   <header class="site-nav">
     <div class="nav-inner">
       <a class="brand" href="{{ url_for('index') }}">
-        <span class="brand-mark">HL</span>
-        <span class="brand-name">Hardamissa Lotto</span>
+        {% if in_wc %}
+          <span class="brand-mark wc-mark">26</span>
+          <span class="brand-name">Hardamissa Lotto<br><span class="brand-sub">World Cup Edition</span></span>
+        {% else %}
+          <span class="brand-mark">HL</span>
+          <span class="brand-name">Hardamissa Lotto</span>
+        {% endif %}
       </a>
       <button class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="primary-nav">☰</button>
       <ul id="primary-nav" class="nav-links">
-        <li><a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="active"{% endif %}>Fixtures</a></li>
-        <li><a href="{{ url_for('leaderboard') }}" {% if request.endpoint == 'leaderboard' %}class="active"{% endif %}>Leaderboard</a></li>
+        <li><a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}class="active"{% endif %}>Serie A</a></li>
+        <li><a href="{{ url_for('worldcup.index') }}" {% if in_wc and request.endpoint == 'worldcup.index' %}class="active"{% endif %}>World Cup 2026</a></li>
+        <li><a href="{{ url_for_comp('leaderboard') }}" {% if request.endpoint in ('leaderboard','worldcup.leaderboard') %}class="active"{% endif %}>Leaderboard</a></li>
         {% if current_user.is_authenticated %}
-          <li><a href="{{ url_for('history') }}" {% if request.endpoint == 'history' %}class="active"{% endif %}>History</a></li>
-          <li><a href="{{ url_for('postponed_fixtures_view') }}" {% if request.endpoint == 'postponed_fixtures_view' %}class="active"{% endif %}>Postponed</a></li>
+          <li><a href="{{ url_for_comp('history') }}" {% if request.endpoint in ('history','worldcup.history') %}class="active"{% endif %}>History</a></li>
+          <li><a href="{{ url_for_comp('postponed') }}" {% if request.endpoint in ('postponed_fixtures_view','worldcup.postponed_fixtures_view') %}class="active"{% endif %}>Postponed</a></li>
         {% endif %}
         {% if current_user.is_authenticated and current_user.is_admin %}
           <li><a href="{{ url_for('admin') }}" {% if request.endpoint and request.endpoint.startswith('admin') %}class="active"{% endif %}>Admin</a></li>
