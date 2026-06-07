@@ -68,7 +68,7 @@
                 </td>
 
                 <td>
-                  <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+                  <div class="match-title">{% set hf = f.home_team|country_flag %}{% if hf %}<span class="team-flag">{{ hf }}</span> {% endif %}{{ f.home_team }} <span class="muted">vs</span> {% set af = f.away_team|country_flag %}{% if af %}<span class="team-flag">{{ af }}</span> {% endif %}{{ f.away_team }}</div>
                   <a href="#" class="toggle-picks" data-target="picks-{{ f.id }}">Show picks</a>
                   <div class="choice"
                        data-fixture-id="{{ f.id }}"

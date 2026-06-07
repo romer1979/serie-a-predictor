@@ -76,7 +76,7 @@
                 <div class="kickoff-time"></div>
               </td>
               <td>
-                <div class="match-title">{{ f.home_team }} <span class="muted">vs</span> {{ f.away_team }}</div>
+                <div class="match-title">{% set hf = f.home_team|country_flag %}{% if hf %}<span class="team-flag">{{ hf }}</span> {% endif %}{{ f.home_team }} <span class="muted">vs</span> {% set af = f.away_team|country_flag %}{% if af %}<span class="team-flag">{{ af }}</span> {% endif %}{{ f.away_team }}</div>
                 {% if f.admin_notes %}
                   <div class="notes-text">📝 {{ f.admin_notes }}</div>
                 {% endif %}

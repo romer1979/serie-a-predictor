@@ -1160,6 +1160,16 @@ body.theme-worldcup .match-title {
   font-family: var(--font-display);
   color: var(--ink);
 }
+
+/* Country flag emoji prefix (applies in any theme — only WC fixtures render
+   it because the filter returns empty for club names). */
+.team-flag {
+  display: inline-block;
+  font-size: 1.15em;
+  line-height: 1;
+  vertical-align: -0.05em;
+  margin-right: 2px;
+}
 body.theme-worldcup .muted,
 body.theme-worldcup .tiny,
 body.theme-worldcup .kickoff-time {

@@ -117,6 +117,109 @@ COMPETITIONS = {
 DEFAULT_COMPETITION = "SA"
 
 # -----------------------------------------------------------------------------
+# Country flags for national teams
+# -----------------------------------------------------------------------------
+# Maps the team-name strings football-data.org returns for national sides to
+# ISO 3166-1 alpha-2 codes. Each entry covers the common spelling variants we
+# see in the wild (e.g. "USA" vs "United States", "Czechia" vs "Czech Republic").
+# Includes all 2022 WC qualifiers + UEFA / CONMEBOL / AFC / CAF / CONCACAF / OFC
+# contenders likely to feature in 2026. Adding a new country is a one-line
+# append below — the flag emoji is computed from the ISO code at lookup time.
+COUNTRY_TO_ISO: dict[str, str] = {
+    # Hosts
+    "USA": "US", "United States": "US",
+    "Canada": "CA",
+    "Mexico": "MX",
+    # CONMEBOL
+    "Argentina": "AR", "Brazil": "BR", "Uruguay": "UY", "Colombia": "CO",
+    "Ecuador": "EC", "Paraguay": "PY", "Peru": "PE", "Chile": "CL",
+    "Venezuela": "VE", "Bolivia": "BO",
+    # UEFA
+    "France": "FR", "Germany": "DE", "Italy": "IT", "Spain": "ES",
+    "Portugal": "PT", "Netherlands": "NL", "Belgium": "BE", "Croatia": "HR",
+    "Switzerland": "CH", "Denmark": "DK", "Poland": "PL", "Austria": "AT",
+    "Serbia": "RS", "Turkey": "TR", "Türkiye": "TR", "Hungary": "HU",
+    "Norway": "NO", "Sweden": "SE", "Ukraine": "UA",
+    "Czech Republic": "CZ", "Czechia": "CZ",
+    "Republic of Ireland": "IE", "Ireland": "IE", "Northern Ireland": "GB-NIR",
+    "Slovakia": "SK", "Slovenia": "SI", "Romania": "RO", "Bulgaria": "BG",
+    "Greece": "GR", "Iceland": "IS", "Finland": "FI", "Russia": "RU",
+    "Bosnia and Herzegovina": "BA", "North Macedonia": "MK", "Albania": "AL",
+    "Montenegro": "ME", "Kosovo": "XK", "Belarus": "BY", "Moldova": "MD",
+    "Georgia": "GE", "Armenia": "AM", "Azerbaijan": "AZ", "Cyprus": "CY",
+    "Estonia": "EE", "Latvia": "LV", "Lithuania": "LT", "Luxembourg": "LU",
+    "Malta": "MT", "Israel": "IL", "Kazakhstan": "KZ",
+    # Home nations — these use subdivision sequences (handled separately)
+    "England": "GB-ENG", "Scotland": "GB-SCT", "Wales": "GB-WLS",
+    # CONCACAF
+    "Costa Rica": "CR", "Panama": "PA", "Honduras": "HN", "Jamaica": "JM",
+    "El Salvador": "SV", "Guatemala": "GT", "Haiti": "HT",
+    "Trinidad and Tobago": "TT", "Cuba": "CU", "Curaçao": "CW", "Curacao": "CW",
+    "Suriname": "SR",
+    # AFC
+    "Japan": "JP",
+    "South Korea": "KR", "Korea Republic": "KR", "Republic of Korea": "KR",
+    "North Korea": "KP", "Korea DPR": "KP",
+    "Iran": "IR", "IR Iran": "IR",
+    "Saudi Arabia": "SA", "Australia": "AU", "Qatar": "QA", "Iraq": "IQ",
+    "United Arab Emirates": "AE", "UAE": "AE",
+    "Uzbekistan": "UZ", "Jordan": "JO", "Oman": "OM", "Lebanon": "LB",
+    "Syria": "SY", "Palestine": "PS", "China": "CN", "China PR": "CN",
+    "Vietnam": "VN", "Thailand": "TH", "Indonesia": "ID", "Malaysia": "MY",
+    "Philippines": "PH", "Singapore": "SG", "India": "IN", "Bahrain": "BH",
+    "Kuwait": "KW", "Yemen": "YE", "Kyrgyzstan": "KG", "Tajikistan": "TJ",
+    "Turkmenistan": "TM",
+    # CAF
+    "Morocco": "MA", "Senegal": "SN", "Tunisia": "TN", "Algeria": "DZ",
+    "Cameroon": "CM", "Egypt": "EG", "Ghana": "GH", "Nigeria": "NG",
+    "Ivory Coast": "CI", "Côte d'Ivoire": "CI", "Cote d'Ivoire": "CI",
+    "South Africa": "ZA", "Mali": "ML", "Burkina Faso": "BF", "Cape Verde": "CV",
+    "Cabo Verde": "CV", "DR Congo": "CD", "Congo DR": "CD",
+    "Democratic Republic of the Congo": "CD", "Congo": "CG", "Gabon": "GA",
+    "Equatorial Guinea": "GQ", "Mauritania": "MR", "Sudan": "SD",
+    "South Sudan": "SS", "Ethiopia": "ET", "Uganda": "UG", "Kenya": "KE",
+    "Tanzania": "TZ", "Zambia": "ZM", "Zimbabwe": "ZW", "Botswana": "BW",
+    "Madagascar": "MG", "Mozambique": "MZ", "Namibia": "NA", "Guinea": "GN",
+    "Guinea-Bissau": "GW", "Sierra Leone": "SL", "Liberia": "LR",
+    "Benin": "BJ", "Togo": "TG", "Niger": "NE", "Comoros": "KM",
+    "Angola": "AO", "Libya": "LY", "Rwanda": "RW", "Burundi": "BI",
+    "Central African Republic": "CF", "Chad": "TD", "Eritrea": "ER",
+    "Lesotho": "LS", "Malawi": "MW", "Eswatini": "SZ", "Mauritius": "MU",
+    # OFC
+    "New Zealand": "NZ", "Fiji": "FJ", "Solomon Islands": "SB", "Tahiti": "PF",
+    "Papua New Guinea": "PG", "Vanuatu": "VU", "New Caledonia": "NC",
+    "Samoa": "WS", "Tonga": "TO",
+}
+
+# Subdivision flags (England, Scotland, Wales, N. Ireland) — these are built
+# from a black-flag base + Unicode tag characters spelling the ISO subdivision.
+_SUBDIVISION_FLAGS = {
+    "GB-ENG":   "🏴\U000E0067\U000E0062\U000E0065\U000E006E\U000E0067\U000E007F",
+    "GB-SCT":   "🏴\U000E0067\U000E0062\U000E0073\U000E0063\U000E0074\U000E007F",
+    "GB-WLS":   "🏴\U000E0067\U000E0062\U000E0077\U000E006C\U000E0073\U000E007F",
+    "GB-NIR":   "🇬🇧",  # No standard tag sequence — fall back to UK flag.
+}
+
+
+def country_flag(team_name: str | None) -> str:
+    """Return the emoji flag for a national team name, or '' if not a country.
+
+    Used as a Jinja filter (`{{ team | country_flag }}`). Returns empty for
+    club names so Serie A pages render unchanged — only WC fixtures get flags.
+    """
+    if not team_name:
+        return ""
+    iso = COUNTRY_TO_ISO.get(team_name)
+    if not iso:
+        return ""
+    if iso in _SUBDIVISION_FLAGS:
+        return _SUBDIVISION_FLAGS[iso]
+    if len(iso) == 2 and iso.isalpha():
+        # Regional indicator letters: 'A' (0x41) + 0x1F185 → 🇦, etc.
+        return "".join(chr(0x1F1E6 + (ord(c.upper()) - ord("A"))) for c in iso)
+    return ""
+
+# -----------------------------------------------------------------------------
 # Jinja filters
 # -----------------------------------------------------------------------------
 
@@ -131,6 +234,12 @@ def utc_iso(dt):
         dt = dt.replace(tzinfo=timezone.utc)
     s = dt.astimezone(timezone.utc).isoformat()
     return s[:-6] + "Z" if s.endswith("+00:00") else s
+
+
+@app.template_filter("country_flag")
+def _country_flag_filter(team_name):
+    """Jinja shim around country_flag(). Empty string for non-country teams."""
+    return country_flag(team_name)
 
 # -----------------------------------------------------------------------------
 # Models
