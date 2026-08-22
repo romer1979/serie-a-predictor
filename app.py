@@ -1290,15 +1290,7 @@ def _view_postponed(competition_code: str):
 @app.route('/')
 @login_required
 def index():
-    """Default landing page: send users straight to the World Cup tab."""
-    return redirect(url_for('worldcup.index'))
-
-
-@app.route('/seriea/')
-@login_required
-def seriea_index():
-    """Stable URL for the Serie A fixtures page (decoupled from '/' since
-    the root now redirects to the World Cup tab)."""
+    """Default landing page: Serie A fixtures."""
     return _view_fixtures('SA')
 
 
@@ -1318,7 +1310,7 @@ def predict(fixture_id: int):
 
     # Redirect back to the fixture's own competition tab.
     return_endpoint = (
-        'worldcup.index' if fixture.competition_code == 'WC' else 'seriea_index'
+        'worldcup.index' if fixture.competition_code == 'WC' else 'index'
     )
 
     if not fixture.is_open_for_prediction():
@@ -1370,7 +1362,7 @@ def _save_all_predictions_view(competition_code: str, redirect_endpoint: str):
 @app.route("/save_all_predictions", methods=["POST"])
 @login_required
 def save_all_predictions():
-    return _save_all_predictions_view('SA', 'seriea_index')
+    return _save_all_predictions_view('SA', 'index')
 
 
 def _view_leaderboard(competition_code: str, redirect_endpoint: str):
@@ -1564,7 +1556,7 @@ def _inject_competition_helpers():
     """
     endpoint_map = {
         'SA': {
-            'fixtures':    'seriea_index',
+            'fixtures':    'index',
             'postponed':   'postponed_fixtures_view',
             'leaderboard': 'leaderboard',
             'history':     'history',
