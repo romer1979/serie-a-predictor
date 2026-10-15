@@ -11,6 +11,7 @@ Key changes:
 
 import os
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -977,6 +978,45 @@ def matchdays_for(season: str, competition_code: str = "SA") -> list[str]:
     return sorted(set(days), key=lambda d: _matchday_sort_key(d, competition_code))
 
 
+def latest_active_matchday(season: str, competition_code: str = "SA") -> str | None:
+    """Latest round underway/played, or the opening round before kickoff.
+
+    A partially played round counts immediately. Order by round rather than
+    kickoff so an old rescheduled fixture cannot pull the default backwards.
+    """
+    days = matchdays_for(season, competition_code) if season else []
+    if not days:
+        return None
+    started = (
+        db.session.query(Fixture.matchday)
+        .filter(
+            Fixture.competition_code == competition_code,
+            Fixture.season == season,
+            ~Fixture.status.in_(EXCLUDED_FROM_CURRENT),
+            db.or_(
+                Fixture.match_date <= datetime.now(timezone.utc),
+                Fixture.status.in_(("IN_PLAY", "PAUSED", "FINISHED")),
+                db.and_(Fixture.home_score.isnot(None), Fixture.away_score.isnot(None)),
+            ),
+        )
+        .distinct()
+        .all()
+    )
+    active_days = [row[0] for row in started if row[0]]
+    return max(active_days, key=lambda d: _matchday_sort_key(d, competition_code)) if active_days else days[0]
+
+
+def selected_round(competition_code: str):
+    """Validate filters and share current-season/latest-round defaults."""
+    seasons = seasons_available(competition_code)
+    season_param = request.args.get("season")
+    season = season_param if season_param in seasons else current_season_from_db(competition_code)
+    days = matchdays_for(season, competition_code) if season else []
+    matchday_param = request.args.get("matchday")
+    matchday = matchday_param if matchday_param in days else latest_active_matchday(season, competition_code)
+    return seasons, season, days, matchday
+
+
 def latest_completed_matchday(season: str, competition_code: str = "SA") -> str | None:
     """Find the latest matchday where all non-postponed fixtures have scores."""
     if not season:
@@ -1085,6 +1125,19 @@ def weekly_user_points(season: str, matchday: str, competition_code: str = "SA")
 
 
 def current_season_from_db(competition_code: str = "SA") -> str | None:
+    # Prefer this season even when next season's schedule is already imported.
+    # Recognize both API labels (2026-27) and the bundled descriptive label.
+    now = datetime.now(timezone.utc)
+    current_year = (now.year if now.month >= 7 else now.year - 1) if competition_code == "SA" else now.year
+    seasons = seasons_available(competition_code)
+    dated_seasons = []
+    for season in seasons:
+        year = re.search(r"\b(\d{4})\b", season)
+        if year and int(year.group(1)) <= current_year:
+            dated_seasons.append((int(year.group(1)), season))
+    if dated_seasons:
+        return max(dated_seasons)[1]
+
     row = (
         db.session.query(Fixture.season)
         .filter(Fixture.competition_code == competition_code)
@@ -1365,27 +1418,16 @@ def save_all_predictions():
     return _save_all_predictions_view('SA', 'index')
 
 
-def _view_leaderboard(competition_code: str, redirect_endpoint: str):
+def _view_leaderboard(competition_code: str):
     update_fixtures_adaptive()
     evaluate_predictions()
 
-    seasons = seasons_available(competition_code)
-    current_season = current_season_from_db(competition_code) or (seasons[-1] if seasons else None)
-
-    raw_scope = request.args.get("scope")
-    scope = (raw_scope or "season").lower()
-    season = request.args.get("season")
-    matchday = request.args.get("matchday")
-
-    if raw_scope is None and current_season:
-        return redirect(url_for(redirect_endpoint, scope="season", season=current_season))
+    seasons, season, days, matchday = selected_round(competition_code)
+    scope = (request.args.get("scope") or "season").lower()
+    if scope not in ("season", "week", "overall"):
+        scope = "season"
 
     if scope == "week":
-        if not season:
-            season = current_season
-        days = matchdays_for(season, competition_code)
-        if not matchday:
-            matchday = latest_completed_matchday(season, competition_code) or (days[-1] if days else None)
         rows = weekly_user_points(season, matchday, competition_code) if matchday else []
         users_sorted = [{"username": r[1], "points": int(r[2])} for r in rows]
         return render_template(
@@ -1399,8 +1441,6 @@ def _view_leaderboard(competition_code: str, redirect_endpoint: str):
         )
 
     if scope == "season":
-        if not season:
-            season = current_season
         users_sorted = season_user_points(season, competition_code)
         return render_template(
             "leaderboard.html",
@@ -1408,7 +1448,7 @@ def _view_leaderboard(competition_code: str, redirect_endpoint: str):
             scope="season",
             seasons=seasons,
             season=season,
-            matchdays=matchdays_for(season, competition_code) if season else [],
+            matchdays=days,
             matchday=None
         )
 
@@ -1422,8 +1462,8 @@ def _view_leaderboard(competition_code: str, redirect_endpoint: str):
         users=users_sorted,
         scope="overall",
         seasons=seasons,
-        season=season or current_season,
-        matchdays=matchdays_for(season or current_season, competition_code) if (season or current_season) else [],
+        season=season,
+        matchdays=days,
         matchday=matchday
     )
 
@@ -1431,20 +1471,7 @@ def _view_leaderboard(competition_code: str, redirect_endpoint: str):
 def _view_history(competition_code: str):
     update_fixtures_adaptive()
 
-    seasons = seasons_available(competition_code)
-    current_season = current_season_from_db(competition_code) or (seasons[-1] if seasons else None)
-
-    season = request.args.get("season") or current_season
-    matchday = request.args.get("matchday") or None
-
-    if season:
-        if not matchday:
-            matchday = latest_completed_matchday(season, competition_code)
-            if not matchday:
-                days = matchdays_for(season, competition_code)
-                matchday = days[0] if days else None
-    else:
-        matchday = None
+    seasons, season, days, matchday = selected_round(competition_code)
 
     fixtures = []
     if season and matchday:
@@ -1469,7 +1496,7 @@ def _view_history(competition_code: str):
         show_preds_flags=show_flags,
         seasons=seasons,
         season=season,
-        matchdays=matchdays_for(season, competition_code) if season else [],
+        matchdays=days,
         matchday=matchday
     )
 
@@ -1477,7 +1504,7 @@ def _view_history(competition_code: str):
 @app.route("/leaderboard")
 @login_required
 def leaderboard():
-    return _view_leaderboard('SA', 'leaderboard')
+    return _view_leaderboard('SA')
 
 
 @app.route("/history")
@@ -1516,7 +1543,7 @@ def postponed_fixtures_view():
 @worldcup_bp.route('/leaderboard')
 @login_required
 def leaderboard():
-    return _view_leaderboard('WC', 'worldcup.leaderboard')
+    return _view_leaderboard('WC')
 
 
 @worldcup_bp.route('/history')
@@ -1749,12 +1776,14 @@ def admin_results():
     if not current_user.is_admin:
         abort(403)
 
+    update_fixtures_adaptive()
+
     # Competition selector — defaults to Serie A; falls back to SA if unknown.
     competition_code = request.args.get("competition") or "SA"
     if competition_code not in COMPETITIONS:
         competition_code = "SA"
 
-    seasons = seasons_available(competition_code)
+    seasons, season, matchdays, matchday = selected_round(competition_code)
     if not seasons:
         return render_template(
             "admin_results.html",
@@ -1766,18 +1795,6 @@ def admin_results():
             competition_code=competition_code,
             competitions=COMPETITIONS,
         )
-
-    # Validate season/matchday against this competition. When the user flips
-    # the Competition dropdown, the auto-submit carries the previous Serie A
-    # season ('2025-26') and matchday ('36') into the URL — those don't exist
-    # for World Cup, so without this snap the matchday list comes back empty
-    # and the table shows no fixtures.
-    season_param = request.args.get("season")
-    season = season_param if season_param in seasons else seasons[-1]
-
-    matchdays = matchdays_for(season, competition_code) if season else []
-    matchday_param = request.args.get("matchday")
-    matchday = matchday_param if matchday_param in matchdays else (matchdays[0] if matchdays else None)
 
     fixtures = []
     if season and matchday:
@@ -2018,26 +2035,13 @@ def admin_coverage():
     if not current_user.is_admin:
         abort(403)
 
+    update_fixtures_adaptive()
+
     competition_code = request.args.get("competition") or "SA"
     if competition_code not in COMPETITIONS:
         competition_code = "SA"
 
-    seasons = seasons_available(competition_code)
-    current_season = current_season_from_db(competition_code) or (seasons[-1] if seasons else None)
-
-    # Snap stale params from a prior Serie A selection to the current
-    # competition's defaults (see admin_results for the rationale).
-    season_param = request.args.get("season")
-    season = season_param if season_param in seasons else current_season
-
-    matchdays = matchdays_for(season, competition_code) if season else []
-    md_param = request.args.get("matchday")
-    if md_param and md_param in matchdays:
-        md = md_param
-    elif season:
-        md = current_home_matchday(season, competition_code) or (matchdays[-1] if matchdays else None)
-    else:
-        md = None
+    seasons, season, matchdays, md = selected_round(competition_code)
 
     rows = prediction_coverage(season, md, competition_code) if season and md else []
 

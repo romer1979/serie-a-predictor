@@ -41,7 +41,7 @@
     </div>
     <div class="form-field">
       <label for="season" class="form-label">Season</label>
-      <select id="season" name="season" class="form-select" onchange="this.form.submit()">
+      <select id="season" name="season" class="form-select" onchange="if (this.form.elements.matchday) this.form.elements.matchday.disabled = true; this.form.submit()">
         {% for s in seasons %}
           <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
         {% endfor %}

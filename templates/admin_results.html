@@ -13,7 +13,7 @@
 <form method="get" action="{{ url_for('admin_results') }}" class="filter-row">
   <div class="form-field">
     <label class="form-label" for="ar-comp">Competition</label>
-    <select id="ar-comp" name="competition" class="form-select" onchange="this.form.submit()">
+    <select id="ar-comp" name="competition" class="form-select" onchange="this.form.elements.season.disabled = true; this.form.elements.matchday.disabled = true; this.form.submit()">
       {% for code, comp in competitions.items() %}
         <option value="{{ code }}" {% if code == competition_code %}selected{% endif %}>{{ comp.display_name }}</option>
       {% endfor %}
@@ -21,7 +21,7 @@
   </div>
   <div class="form-field">
     <label class="form-label" for="ar-season">Season</label>
-    <select id="ar-season" name="season" class="form-select" onchange="this.form.submit()">
+    <select id="ar-season" name="season" class="form-select" onchange="this.form.elements.matchday.disabled = true; this.form.submit()">
       {% for s in seasons %}
         <option value="{{ s }}" {% if s == season %}selected{% endif %}>{{ s }}</option>
       {% endfor %}
