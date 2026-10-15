@@ -1006,14 +1006,19 @@ def latest_active_matchday(season: str, competition_code: str = "SA") -> str | N
     return max(active_days, key=lambda d: _matchday_sort_key(d, competition_code)) if active_days else days[0]
 
 
-def selected_round(competition_code: str):
-    """Validate filters and share current-season/latest-round defaults."""
+def selected_round(competition_code: str, *, pending: bool = False):
+    """Validate filters; admin pages prefer a round still awaiting results."""
     seasons = seasons_available(competition_code)
     season_param = request.args.get("season")
     season = season_param if season_param in seasons else current_season_from_db(competition_code)
     days = matchdays_for(season, competition_code) if season else []
     matchday_param = request.args.get("matchday")
-    matchday = matchday_param if matchday_param in days else latest_active_matchday(season, competition_code)
+    if matchday_param in days:
+        matchday = matchday_param
+    elif pending:
+        matchday = current_home_matchday(season, competition_code)
+    else:
+        matchday = latest_active_matchday(season, competition_code)
     return seasons, season, days, matchday
 
 
@@ -1084,8 +1089,11 @@ def current_home_matchday(season: str, competition_code: str = "SA") -> str | No
                 Fixture.matchday == md,
                 ~Fixture.status.in_(EXCLUDED_FROM_CURRENT),
                 db.or_(
-                    Fixture.home_score.is_(None),
-                    Fixture.away_score.is_(None)
+                    Fixture.status.in_(("IN_PLAY", "PAUSED")),
+                    db.and_(
+                        Fixture.status != "FINISHED",
+                        db.or_(Fixture.home_score.is_(None), Fixture.away_score.is_(None)),
+                    ),
                 )
             )
             .first()
@@ -1783,7 +1791,7 @@ def admin_results():
     if competition_code not in COMPETITIONS:
         competition_code = "SA"
 
-    seasons, season, matchdays, matchday = selected_round(competition_code)
+    seasons, season, matchdays, matchday = selected_round(competition_code, pending=True)
     if not seasons:
         return render_template(
             "admin_results.html",
@@ -2041,7 +2049,7 @@ def admin_coverage():
     if competition_code not in COMPETITIONS:
         competition_code = "SA"
 
-    seasons, season, matchdays, md = selected_round(competition_code)
+    seasons, season, matchdays, md = selected_round(competition_code, pending=True)
 
     rows = prediction_coverage(season, md, competition_code) if season and md else []
 

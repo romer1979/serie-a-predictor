@@ -110,6 +110,53 @@ class PageDefaultsTest(unittest.TestCase):
         self.assertEqual(context["matchday"], "10")
         self.assertEqual(context["users"], [{"username": "player", "points": 1}])
 
+    def test_admin_moves_to_next_round_after_all_matches_finish(self):
+        application.Fixture.query.filter_by(season="2026-27", matchday="10").update({
+            "status": "FINISHED", "home_score": 2, "away_score": 0,
+        })
+        application.db.session.commit()
+        for url in ("/admin/coverage", "/admin/results"):
+            with self.subTest(url=url):
+                _, context = self.page(url)
+                self.assertEqual(context["matchday"], "11")
+                # Completed rounds remain available when explicitly selected.
+                _, context = self.page(url + "?matchday=10")
+                self.assertEqual(context["matchday"], "10")
+        _, context = self.page("/history")
+        self.assertEqual(context["matchday"], "10")
+
+    def test_admin_keeps_ongoing_round_even_when_live_scores_are_present(self):
+        for status in ("IN_PLAY", "PAUSED"):
+            application.Fixture.query.filter_by(season="2026-27", matchday="10").update({
+                "status": status, "home_score": 1, "away_score": 1,
+            })
+            application.db.session.commit()
+            for url in ("/admin/coverage", "/admin/results"):
+                with self.subTest(status=status, url=url):
+                    _, context = self.page(url)
+                    self.assertEqual(context["matchday"], "10")
+
+    def test_admin_ignores_postponed_matches_in_completed_round(self):
+        application.Fixture.query.filter_by(season="2026-27", matchday="10").update({
+            "status": "FINISHED", "home_score": 2, "away_score": 0,
+        })
+        self.fixture("2026-27", "10", "2026-10-16", status="POSTPONED")
+        application.db.session.commit()
+        for url in ("/admin/coverage", "/admin/results"):
+            with self.subTest(url=url):
+                _, context = self.page(url)
+                self.assertEqual(context["matchday"], "11")
+
+    def test_admin_does_not_treat_finished_match_with_missing_score_as_upcoming(self):
+        application.Fixture.query.filter_by(season="2026-27", matchday="10").update({
+            "status": "FINISHED", "home_score": None, "away_score": None,
+        })
+        application.db.session.commit()
+        for url in ("/admin/coverage", "/admin/results"):
+            with self.subTest(url=url):
+                _, context = self.page(url)
+                self.assertEqual(context["matchday"], "11")
+
     def test_manual_season_and_round_selections_are_preserved(self):
         for url in ("/leaderboard?scope=week&", "/history?", "/admin/coverage?", "/admin/results?"):
             with self.subTest(url=url):
